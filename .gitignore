@@ -22,3 +22,6 @@ next-env.d.ts
 # local preview tooling & test fixtures
 .claude/
 public/test-photos.json
+
+# vercel local project link
+.vercel
