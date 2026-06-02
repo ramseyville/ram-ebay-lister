@@ -18,3 +18,7 @@
 # typescript
 next-env.d.ts
 *.tsbuildinfo
+
+# local preview tooling & test fixtures
+.claude/
+public/test-photos.json
