@@ -8,7 +8,7 @@ import {
 } from "@/lib/prompts";
 import { labeledContent, toImageBlock, type WireImage } from "@/lib/images";
 
-const GROUP_MODEL = "claude-sonnet-4-6";
+const GROUP_MODEL = "claude-fable-5";
 const CHECK_MODEL = "claude-haiku-4-5-20251001";
 const BATCH_SIZE = 10;
 
