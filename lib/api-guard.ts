@@ -9,8 +9,10 @@ import crypto from "crypto";
  * environment and the app will ask for the access code once per device
  * (it's remembered in the browser afterwards).
  *
- * If APP_SECRET is unset the guard allows everything — fine for local dev,
- * NOT recommended for a deployed app.
+ * If APP_SECRET is unset the guard allows everything in local development,
+ * but FAILS CLOSED in production (VERCEL_ENV=production): every guarded
+ * route returns 503 until the variable is configured. A forgotten secret
+ * must never silently expose money-spending endpoints.
  */
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -45,25 +47,48 @@ function rateLimited(ip: string): boolean {
 }
 
 /**
- * Returns an error response when the request isn't allowed, or null to proceed.
+ * Rate limiting only — for routes that must stay reachable without the access
+ * code (the eBay OAuth callback, the status probe) but shouldn't be hammered.
  */
-export function guardApiRequest(req: NextRequest): NextResponse | null {
+export function rateLimitRequest(req: NextRequest): NextResponse | null {
   if (rateLimited(clientIp(req))) {
     return NextResponse.json(
       { ok: false, error: "Too many requests — wait a minute and try again." },
       { status: 429 }
     );
   }
+  return null;
+}
+
+/**
+ * Returns an error response when the request isn't allowed, or null to proceed.
+ */
+export function guardApiRequest(req: NextRequest): NextResponse | null {
+  const limited = rateLimitRequest(req);
+  if (limited) return limited;
 
   const secret = process.env.APP_SECRET;
-  if (secret) {
-    const provided = req.headers.get("x-app-secret") ?? "";
-    if (!provided || !timingSafeEqual(provided, secret)) {
+  if (!secret) {
+    // Fail closed in production — never run a deployed app without an access code.
+    if (process.env.VERCEL_ENV === "production") {
       return NextResponse.json(
-        { ok: false, code: "ACCESS_CODE_REQUIRED", error: "Access code required." },
-        { status: 401 }
+        {
+          ok: false,
+          error:
+            "This deployment has no APP_SECRET configured. Set it in Vercel → Settings → Environment Variables, then redeploy.",
+        },
+        { status: 503 }
       );
     }
+    return null; // local development only
+  }
+
+  const provided = req.headers.get("x-app-secret") ?? "";
+  if (!provided || !timingSafeEqual(provided, secret)) {
+    return NextResponse.json(
+      { ok: false, code: "ACCESS_CODE_REQUIRED", error: "Access code required." },
+      { status: 401 }
+    );
   }
 
   return null;

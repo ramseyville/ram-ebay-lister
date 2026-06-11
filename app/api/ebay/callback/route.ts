@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimitRequest } from "@/lib/api-guard";
 import { exchangeCode } from "@/lib/ebay/oauth";
 import {
   EBAY_COOKIE,
@@ -17,7 +18,12 @@ function appUrl(req: NextRequest, path: string): URL {
 }
 
 // eBay redirects the user back here with ?code=... after they consent.
+// Must stay reachable without the access code (it's a browser redirect from
+// eBay), so it is protected by the state cookie below plus the rate limiter.
 export async function GET(req: NextRequest) {
+  const limited = rateLimitRequest(req);
+  if (limited) return limited;
+
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state");
   const expectedState = req.cookies.get(EBAY_STATE_COOKIE)?.value;
