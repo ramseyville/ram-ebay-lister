@@ -12,7 +12,7 @@ const CONDITIONS: { value: string; label: string }[] = [
   { value: "EXCELLENT", label: "Pre-owned · Excellent" },
   { value: "VERY_GOOD", label: "Pre-owned · Very good" },
   { value: "GOOD", label: "Pre-owned · Good" },
-  { value: "ACCEPTABLE", label: "Pre-owned · Acceptable" },
+  { value: "FAIR", label: "Pre-owned · Fair" },
 ];
 
 function formatPrice(value: ListingResult["suggested_price"]): string {

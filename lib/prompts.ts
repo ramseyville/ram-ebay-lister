@@ -103,7 +103,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation. Use this
   "color": ["Primary color", "Secondary color if present — omit if solid"],
   "size": "Size EXACTLY as printed on the tag. Write 'See photos' if no tag visible.",
   "material": "Fabric or material composition as shown on tag. Write 'See tag in photos' if unclear.",
-  "condition": "One of: NEW_WITH_TAGS, NEW_NO_TAGS, EXCELLENT, VERY_GOOD, GOOD, ACCEPTABLE",
+  "condition": "One of: NEW_WITH_TAGS, NEW_NO_TAGS, EXCELLENT, VERY_GOOD, GOOD, FAIR",
   "condition_notes": "Honest 2-3 sentence condition description for buyers.",
   "measurements": "Any measurements visible in photos, formatted clearly. Write 'See listing photos for measurements' if none visible.",
   "description": "Full eBay listing description — plain text only, no markdown.",

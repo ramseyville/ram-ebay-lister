@@ -9,6 +9,12 @@ import {
   EBAY_MARKETPLACE_ID,
   EBAY_TRADING,
 } from "./config";
+import {
+  suggestLeafCategory,
+  categoryAspects,
+  acceptedConditionIds,
+  type AspectMeta,
+} from "./taxonomy";
 import type { ListingResult } from "@/lib/types";
 
 // ── Constants (from the Python script) ───────────────────────────────────────
@@ -36,16 +42,75 @@ const CATEGORY_MAP: Record<string, string> = {
 
 const LEAF_FALLBACKS = ["1463", "22733", "2550", "48108", "316", "171485", "2624", "2613"];
 
-const GENERAL_CONDITION_MAP: Record<string, string> = {
-  NEW_WITH_TAGS: "NEW", NEW_NO_TAGS: "NEW_OTHER", EXCELLENT: "USED_EXCELLENT",
-  VERY_GOOD: "USED_VERY_GOOD", GOOD: "USED_GOOD", ACCEPTABLE: "USED_ACCEPTABLE",
+const CONDITION_ALIASES: Record<string, string> = {
+  NEW: "NEW_WITH_TAGS",
+  NWT: "NEW_WITH_TAGS",
+  NEW_WITH_TAGS: "NEW_WITH_TAGS",
+  NEW_WITH_BOX: "NEW_WITH_TAGS",
+  NEW_WITHOUT_TAGS: "NEW_NO_TAGS",
+  NEW_WITHOUT_BOX: "NEW_NO_TAGS",
+  NEW_NO_TAGS: "NEW_NO_TAGS",
+  NEW_OTHER: "NEW_NO_TAGS",
+  OPEN_BOX: "NEW_NO_TAGS",
+  LIKE_NEW: "EXCELLENT",
+  PREOWNED_EXCELLENT: "EXCELLENT",
+  PRE_OWNED_EXCELLENT: "EXCELLENT",
+  USED_EXCELLENT: "EXCELLENT",
+  EXCELLENT: "EXCELLENT",
+  VERY_GOOD: "VERY_GOOD",
+  PREOWNED_VERY_GOOD: "VERY_GOOD",
+  PRE_OWNED_VERY_GOOD: "VERY_GOOD",
+  USED_VERY_GOOD: "VERY_GOOD",
+  USED: "GOOD",
+  PREOWNED: "GOOD",
+  PRE_OWNED: "GOOD",
+  USED_GOOD: "GOOD",
+  PREOWNED_GOOD: "GOOD",
+  PRE_OWNED_GOOD: "GOOD",
+  GOOD: "GOOD",
+  ACCEPTABLE: "FAIR",
+  USED_ACCEPTABLE: "FAIR",
+  FAIR: "FAIR",
+  PREOWNED_FAIR: "FAIR",
+  PRE_OWNED_FAIR: "FAIR",
+  USED_FAIR: "FAIR",
 };
 
-const APPAREL_CONDITION_MAP: Record<string, string> = {
-  NEW_WITH_TAGS: "NEW", NEW_NO_TAGS: "NEW_OTHER", LIKE_NEW: "PRE_OWNED_EXCELLENT",
-  EXCELLENT: "PRE_OWNED_EXCELLENT", VERY_GOOD: "USED_EXCELLENT",
-  GOOD: "USED_EXCELLENT", ACCEPTABLE: "PRE_OWNED_FAIR",
+const CONDITION_ID_ENUM: Record<number, string> = {
+  1000: "NEW",
+  1500: "NEW_OTHER",
+  1750: "NEW_WITH_DEFECTS",
+  2750: "LIKE_NEW",
+  2990: "PRE_OWNED_EXCELLENT",
+  3000: "USED_EXCELLENT",
+  3010: "PRE_OWNED_FAIR",
+  4000: "USED_VERY_GOOD",
+  5000: "USED_GOOD",
+  6000: "USED_ACCEPTABLE",
+  7000: "FOR_PARTS_OR_NOT_WORKING",
 };
+
+const GENERAL_CONDITION_ID_PREFERENCES: Record<string, number[]> = {
+  NEW_WITH_TAGS: [1000, 1500, 1750],
+  NEW_NO_TAGS: [1500, 1000, 1750],
+  EXCELLENT: [3000, 2750, 4000, 5000],
+  VERY_GOOD: [4000, 3000, 5000, 2750],
+  GOOD: [5000, 4000, 3000, 6000],
+  FAIR: [6000, 5000, 4000, 3000],
+};
+
+const APPAREL_CONDITION_ID_PREFERENCES: Record<string, number[]> = {
+  NEW_WITH_TAGS: [1000, 1500, 1750],
+  NEW_NO_TAGS: [1500, 1000, 1750],
+  EXCELLENT: [2990, 3000, 3010],
+  // eBay has no apparel "Very Good" tier. Use Good before overgrading as Excellent.
+  VERY_GOOD: [3000, 2990, 3010],
+  GOOD: [3000, 3010, 2990],
+  FAIR: [3010, 3000, 2990],
+};
+
+const GENERAL_SAFE_CONDITION_IDS = [3000, 4000, 5000, 6000, 2750, 1500, 1000, 1750, 7000];
+const APPAREL_SAFE_CONDITION_IDS = [3000, 2990, 3010, 1500, 1000, 1750];
 
 const APPAREL_CATEGORIES = new Set([
   "womens_top", "womens_dress", "womens_skirt", "womens_pants", "womens_coat",
@@ -53,7 +118,6 @@ const APPAREL_CATEGORIES = new Set([
   "mens_pants", "mens_coat", "mens_sweater", "mens_jeans", "mens_clothing",
   "mens_shoes", "scarf", "belt", "hat",
 ]);
-const HANDBAG_CATEGORIES = new Set(["handbag", "wallet"]);
 const PANTS_CATEGORIES = new Set([
   "womens_pants", "womens_jeans", "womens_skirt", "mens_pants", "mens_jeans",
 ]);
@@ -116,17 +180,48 @@ function computeBufferedPrice(raw: number | string | undefined): number {
 }
 
 function normalizeConditionInput(value: string | undefined): string {
-  const cleaned = (value || "GOOD").trim().toUpperCase().replace(/[ -]/g, "_");
-  if (cleaned === "LIKE_NEW") return "EXCELLENT";
-  return cleaned in GENERAL_CONDITION_MAP ? cleaned : "GOOD";
+  const cleaned = (value || "GOOD")
+    .trim()
+    .toUpperCase()
+    .replace(/['’]/g, "")
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return CONDITION_ALIASES[cleaned] || "GOOD";
 }
 
-function pickCondition(catKey: string, condRaw: string | undefined): string {
-  const desired = normalizeConditionInput(condRaw);
-  if (APPAREL_CATEGORIES.has(catKey) || HANDBAG_CATEGORIES.has(catKey)) {
-    return APPAREL_CONDITION_MAP[desired] || "USED_EXCELLENT";
+function isApparelConditionPolicy(acceptedIds: Set<number>): boolean {
+  return acceptedIds.has(2990) || acceptedIds.has(3010);
+}
+
+function conditionIdsForGrade(grade: string, acceptedIds: Set<number>): number[] {
+  const apparel = isApparelConditionPolicy(acceptedIds);
+  const preferences = apparel ? APPAREL_CONDITION_ID_PREFERENCES : GENERAL_CONDITION_ID_PREFERENCES;
+  const safeIds = apparel ? APPAREL_SAFE_CONDITION_IDS : GENERAL_SAFE_CONDITION_IDS;
+  const preferred = preferences[grade] || preferences.GOOD;
+
+  if (!acceptedIds.size) return preferred;
+
+  const out: number[] = [];
+  const add = (id: number) => {
+    if (acceptedIds.has(id) && CONDITION_ID_ENUM[id] && !out.includes(id)) out.push(id);
+  };
+  for (const id of preferred) add(id);
+  for (const id of safeIds) add(id);
+  for (const id of acceptedIds) add(id);
+  return out.length ? out : preferred;
+}
+
+// Ordered eBay Inventory condition enums to try for an internal grade. The grade
+// comes from photo analysis; the allowed IDs come from the chosen leaf category's
+// Metadata policy, so apparel/books/electronics/etc. can each resolve differently.
+function conditionCandidates(grade: string | undefined, acceptedIds: Set<number>): string[] {
+  const desired = normalizeConditionInput(grade);
+  const out: string[] = [];
+  for (const id of conditionIdsForGrade(desired, acceptedIds)) {
+    const en = CONDITION_ID_ENUM[id];
+    if (en && !out.includes(en)) out.push(en);
   }
-  return GENERAL_CONDITION_MAP[desired] || "USED_GOOD";
+  return out.length ? out : ["USED_GOOD"];
 }
 
 function resolveCategory(listing: ListingResult): {
@@ -215,6 +310,88 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
     if (val && !aspects[k]) aspects[k] = [val];
   }
   return aspects;
+}
+
+// ── Required-aspect reconciliation (driven by eBay's Taxonomy data) ──────────
+//
+// The static defaults above can't know what each leaf category requires, nor
+// which values its SELECTION_ONLY aspects accept. We ask eBay for both and make
+// every required aspect valid before publishing — eliminating the 25002 errors.
+
+// Match a value against eBay's allowed list, case-insensitively and tolerating
+// singular/plural (so "Unisex Adult" resolves to the valid "Unisex Adults").
+// Returns the canonical allowed value, or null if there's no match.
+function matchAllowed(value: string, allowed: string[]): string | null {
+  const ls = (value || "").trim().toLowerCase();
+  if (!ls) return null;
+  for (const v of allowed) {
+    const lv = v.toLowerCase();
+    if (lv === ls || lv === `${ls}s` || `${lv}s` === ls) return v;
+  }
+  return null;
+}
+
+// Choose a valid Department from the category's own allowed values, biased by
+// the item's gender cues. Kids categories only allow Boys/Girls/Unisex Kids, so
+// a blind "Unisex Adults" default would still fail — we match against the list.
+function pickDepartment(allowed: string[], listing: ListingResult, catKey: string): string {
+  const text = `${catKey} ${listing.title || ""} ${listing.item_type || ""} ${
+    listing.item_specifics?.Department || ""
+  }`.toLowerCase();
+  const women = catKey.startsWith("womens_") || /\b(women|woman|ladies|female|girl)\b/.test(text);
+  const men = catKey.startsWith("mens_") || /\b(men|man|male|boy)\b/.test(text);
+  const pref = women
+    ? ["Women", "Women's", "Girls", "Unisex Adults", "Unisex Kids", "Unisex"]
+    : men
+      ? ["Men", "Men's", "Boys", "Unisex Adults", "Unisex Kids", "Unisex"]
+      : ["Unisex Adults", "Unisex Kids", "Unisex", "Women", "Men"];
+  for (const p of pref) {
+    const m = matchAllowed(p, allowed);
+    if (m) return m;
+  }
+  return allowed[0] || "";
+}
+
+// Best free-text fill for a required aspect we don't already have, drawn from
+// the listing itself. eBay accepts any string for FREE_TEXT aspects.
+function freeTextDefault(name: string, listing: ListingResult): string {
+  const n = name.toLowerCase();
+  if (n.includes("brand")) return String(listing.brand || "").trim() || "Unbranded";
+  if (n.includes("color")) return singleValue(listing.color) || "Multicolor";
+  if (n.includes("shoe size") || n === "size") return String(listing.size || "").trim();
+  if (n.includes("material")) return singleValue(listing.material) || "Man Made";
+  if (n.includes("style")) return String(listing.item_specifics?.Style || listing.item_type || "").trim();
+  if (n.includes("type")) return String(listing.item_type || "").trim();
+  return "";
+}
+
+// Make every REQUIRED aspect present and valid. Mutates `aspects` in place.
+function reconcileAspects(
+  aspects: Record<string, string[]>,
+  meta: AspectMeta[],
+  listing: ListingResult,
+  catKey: string
+): void {
+  for (const a of meta) {
+    if (!a.required || !a.name) continue;
+    const current = aspects[a.name]?.[0];
+
+    if (a.mode === "SELECTION_ONLY") {
+      // Must be one of eBay's allowed values, or the publish 25002-fails.
+      const canonical =
+        matchAllowed(current || "", a.values) ||
+        matchAllowed(ASPECT_DEFAULTS[a.name] || "", a.values) ||
+        (a.name === "Department" ? pickDepartment(a.values, listing, catKey) : "") ||
+        a.values[0] ||
+        "";
+      if (canonical) aspects[a.name] = [canonical];
+    } else if (!current) {
+      // FREE_TEXT and unset — fill from the listing or a sensible default.
+      const v = freeTextDefault(a.name, listing) || ASPECT_DEFAULTS[a.name] || a.values[0] || "";
+      const clipped = clipAspectValue(v);
+      if (clipped) aspects[a.name] = [clipped];
+    }
+  }
 }
 
 // ── eBay error parsing (from the script) ─────────────────────────────────────
@@ -393,8 +570,11 @@ export async function publishListing(
 ): Promise<PublishResult> {
   const { sku, listing } = input;
   const catKey = String(listing.category || "other");
-  const { categoryId, fallbacks } = resolveCategory(listing);
-  let catId = categoryId;
+  const { categoryId: staticCat, fallbacks } = resolveCategory(listing);
+  // Ask eBay for the real LEAF category from the title + hint; fall back to the
+  // static map only if Taxonomy is unavailable. (Fixes 25005 non-leaf errors.)
+  const leaf = await suggestLeafCategory(`${listing.category_hint || ""} ${listing.title || ""}`);
+  let catId = leaf || staticCat;
 
   if (!setup.fulfillmentPolicyId || !setup.paymentPolicyId || !setup.returnPolicyId) {
     return {
@@ -417,7 +597,22 @@ export async function publishListing(
 
   // 2. Inventory item.
   const aspects = buildAspects(listing, catKey);
-  let condition = pickCondition(catKey, listing.condition);
+  // Ask eBay (in parallel) for the leaf category's REQUIRED specifics and its
+  // accepted condition ids, then make both valid before creating the item.
+  // Non-fatal: the recovery loops below remain as a backup if eBay is slow.
+  let acceptedConds = new Set<number>();
+  try {
+    const [meta, conds] = await Promise.all([
+      categoryAspects(catId), // required aspects + valid values  → fixes 25002
+      acceptedConditionIds(catId), // accepted condition ids       → fixes 25021
+    ]);
+    if (meta.length) reconcileAspects(aspects, meta, listing, catKey);
+    acceptedConds = conds;
+  } catch {
+    /* taxonomy/metadata unavailable — proceed with best-effort values */
+  }
+  const condCandidates = conditionCandidates(listing.condition, acceptedConds);
+  const condition = condCandidates[0] || "USED_EXCELLENT";
   const inventoryItem: any = {
     product: {
       title: String(listing.title || "Untitled").slice(0, 80),
@@ -442,6 +637,20 @@ export async function publishListing(
     if (missing.length && addMissingAspects(aspects, missing).length) {
       inventoryItem.product.aspects = aspects;
       r = await putInventory();
+    }
+    // Recovery: condition invalid for this category (25021/25059) → step down
+    // to a grade the category accepts.
+    if (
+      ![200, 201, 204].includes(r.status) &&
+      (errorIds(r).includes(25021) || errorIds(r).includes(25059))
+    ) {
+      for (const alt of condCandidates) {
+        if (alt === inventoryItem.condition) continue;
+        inventoryItem.condition = alt;
+        r = await putInventory();
+        if ([200, 201, 204].includes(r.status)) break;
+        if (!errorIds(r).includes(25021) && !errorIds(r).includes(25059)) break;
+      }
     }
     if (![200, 201, 204].includes(r.status)) {
       return { success: false, sku, error: `Inventory item failed (${r.status}): ${r.text.slice(0, 300)}` };
@@ -524,6 +733,7 @@ export async function publishListing(
     inventoryItem,
     offerBody,
     fallbacks,
+    condCandidates,
   });
 }
 
@@ -538,6 +748,7 @@ async function publishOfferWithRecovery(
     inventoryItem: any;
     offerBody: any;
     fallbacks: string[];
+    condCandidates: string[];
   }
 ): Promise<PublishResult> {
   const { sku, offerId } = ctx;
@@ -566,15 +777,18 @@ async function publishOfferWithRecovery(
     eids = errorIds(r);
   }
 
-  // Recovery: invalid condition (25059/25021) → fall back to a safe used grade.
+  // Recovery: invalid condition (25059/25021) → step through the remaining
+  // candidate grades until one publishes.
   if (eids.includes(25059) || eids.includes(25021)) {
-    ctx.inventoryItem.condition = APPAREL_CATEGORIES.has(ctx.catKey)
-      ? "PRE_OWNED_EXCELLENT"
-      : "USED_GOOD";
-    await putInventory();
-    r = await doPublish();
-    if (r.ok) return { success: true, sku, offerId, listingId: r.json?.listingId || "" };
-    eids = errorIds(r);
+    for (const alt of ctx.condCandidates) {
+      if (alt === ctx.inventoryItem.condition) continue;
+      ctx.inventoryItem.condition = alt;
+      await putInventory();
+      r = await doPublish();
+      if (r.ok) return { success: true, sku, offerId, listingId: r.json?.listingId || "" };
+      eids = errorIds(r);
+      if (!eids.includes(25021) && !eids.includes(25059)) break;
+    }
   }
 
   // Recovery: non-leaf category (25005) → try fallbacks via offer update.
