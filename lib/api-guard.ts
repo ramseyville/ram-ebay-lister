@@ -10,9 +10,9 @@ import crypto from "crypto";
  * (it's remembered in the browser afterwards).
  *
  * If APP_SECRET is unset the guard allows everything in local development,
- * but FAILS CLOSED in production (VERCEL_ENV=production): every guarded
- * route returns 503 until the variable is configured. A forgotten secret
- * must never silently expose money-spending endpoints.
+ * but FAILS CLOSED in production (NODE_ENV=production or VERCEL_ENV=production):
+ * every guarded route returns 503 until the variable is configured. A forgotten
+ * secret must never silently expose money-spending endpoints.
  */
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -70,7 +70,7 @@ export function guardApiRequest(req: NextRequest): NextResponse | null {
   const secret = process.env.APP_SECRET;
   if (!secret) {
     // Fail closed in production — never run a deployed app without an access code.
-    if (process.env.VERCEL_ENV === "production") {
+    if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
       return NextResponse.json(
         {
           ok: false,
