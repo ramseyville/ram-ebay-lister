@@ -66,6 +66,16 @@ function firstText(resp: Anthropic.Message): string {
   return block && block.type === "text" ? block.text.trim() : "";
 }
 
+// When web_search is enabled the model may emit a text block before the
+// tool call (e.g. "Let me check the size chart...") and the real JSON
+// payload in a later text block after the search result. Take the LAST
+// text block, not the first, so we don't try to parse narration as JSON.
+function lastText(resp: Anthropic.Message): string {
+  const textBlocks = resp.content.filter((b) => b.type === "text");
+  const block = textBlocks[textBlocks.length - 1];
+  return block && block.type === "text" ? block.text.trim() : "";
+}
+
 export async function POST(req: NextRequest) {
   const denied = guardApiRequest(req);
   if (denied) return denied;
@@ -116,6 +126,17 @@ export async function POST(req: NextRequest) {
         const resp = await client.messages.create({
           model: ANALYSIS_MODEL,
           max_tokens: 3000,
+          // Lets the model look up the brand's official size chart for
+          // measurements instead of estimating from photos. Capped to keep
+          // cost predictable — measurement lookups rarely need more than a
+          // couple of searches per item.
+          tools: [
+            {
+              type: "web_search_20250305",
+              name: "web_search",
+              max_uses: 3,
+            },
+          ],
           // System prompt is large and identical across requests for the same
           // profile — cache it to cut cost and latency.
           system: [
@@ -138,7 +159,7 @@ export async function POST(req: NextRequest) {
             },
           ],
         });
-        const listing = parseModelJson<ListingResult>(firstText(resp));
+        const listing = parseModelJson<ListingResult>(lastText(resp));
         listing.item_profile = profile;
         return NextResponse.json({ ok: true, listing });
       } catch (err) {
