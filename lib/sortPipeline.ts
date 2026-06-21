@@ -20,6 +20,42 @@ const MERGE_CONCURRENCY = 4;
 
 const RETRYABLE_STATUS = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
 
+// Account-level Anthropic failures (bad key, no model access, no credits) make
+// EVERY call fail, so retrying or degrading to "0 groups" is pointless — and it
+// surfaces the misleading "try fewer photos" message. Detect these and throw so
+// the route can tell the user the real cause.
+export class SortAuthError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "SortAuthError";
+    this.status = status;
+  }
+}
+
+function fatalAuthError(e: unknown, status: number | undefined): SortAuthError | null {
+  const message =
+    e && typeof e === "object" && "message" in e
+      ? String((e as { message?: unknown }).message ?? "")
+      : "";
+  if (status === 401)
+    return new SortAuthError(
+      "Anthropic rejected your API key (401). Check that ANTHROPIC_API_KEY is set correctly in your environment variables.",
+      401
+    );
+  if (status === 403)
+    return new SortAuthError(
+      "Your Anthropic API key isn't permitted to use this model (403). Check the key's access in the Anthropic Console.",
+      403
+    );
+  if (status === 402 || /credit balance|too low|billing|payment|insufficient|quota/i.test(message))
+    return new SortAuthError(
+      "Your Anthropic account can't cover this request — add credits/billing in the Anthropic Console, then try again.",
+      402
+    );
+  return null;
+}
+
 export interface SortGroup {
   name: string;
   photoIndices: number[];
@@ -75,6 +111,9 @@ async function claudeJson<T>(
         e && typeof e === "object" && "status" in e
           ? Number((e as { status?: number }).status)
           : undefined;
+      // Account-level failures won't fix themselves on retry — surface them.
+      const fatal = fatalAuthError(e, status);
+      if (fatal) throw fatal;
       const retryable = status === undefined || RETRYABLE_STATUS.has(status);
       if (attempt < 3 && retryable) {
         const wait = Math.min(10000, 800 * 2 ** attempt) + Math.floor(Math.random() * 400);
