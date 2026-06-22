@@ -96,18 +96,19 @@ TITLE — non-negotiable: the "title" field MUST be between 77 and 80 characters
 
 NWT / condition gating — non-negotiable: only use NEW_WITH_TAGS if the photos show a physical tag still attached to the item. A tag lying loose nearby, a price sticker, or no visible tag at all means you must NOT claim NWT — use NEW_NO_TAGS or an appropriate pre-owned grade instead. Never infer "with tags" from retail-perfect condition alone.
 
-MEASUREMENTS — non-negotiable: do NOT estimate or invent measurements from the photos. The "measurements" field must come from the brand's official published size chart for the exact size/style shown on the tag, looked up via web search. If web search is unavailable or no official chart can be confirmed for this brand/style, write exactly: "NEEDS VERIFICATION — confirm measurements from brand size chart before publishing." Never fabricate a number and never tell the seller to physically measure the item themselves.
+MEASUREMENTS — non-negotiable: do NOT estimate or invent measurements from the photos. The "measurements" field must come from the brand's official published size chart for the exact size/style shown on the tag. You have multiple web_search calls available for this — use them. Try the brand's own site first; if that 404s or doesn't have the style, try an authorized retailer that carries the brand (their product pages often cache the same size chart), then try a general search for "[brand] [item type] size chart [size]" if needed. Do not give up after a single search. Only write "NEEDS VERIFICATION — confirm measurements from brand size chart before publishing" if you have made a genuine effort across multiple search attempts and a chart truly cannot be found anywhere — this should be rare, not a default. Never fabricate a number and never tell the seller to physically measure the item themselves.
 
 PRICING — non-negotiable: you do not have access to live eBay sold-comp data, so you must NOT invent a price. Set "suggested_price" to the literal string "PRICE — fill in from sold eBay comps" in every case, with no exceptions, regardless of how confident you are about value.
 
 DESCRIPTION STRUCTURE — the "description" field must be a single plain-text block (no markdown) containing these parts in this exact order, each as its own paragraph or short section, with no internal labels/headers in the output:
-1. Opening hook + style description in professional, brand-appropriate language
-2. Measurements (restate the measurements field here in clean bullet-style lines)
-3. Fabric / material composition
-4. Condition statement (honest, specific — flaws called out plainly)
-5. SEO paragraph — naturally woven sentence(s) containing 15+ relevant search keywords (brand, style, size, color, fit, era, material, etc.), never presented as a bare keyword list
-6. Closing sign-off line, verbatim: "Find more quality men's clothing, outdoor gear, and collectibles at Courthouse Square Deals on eBay. Ships fast from Texas."
-Do not include a pricing mention, internal notes, or section labels like "Measurements:" as headers — write it as flowing, clean, copy-paste-ready prose and bullets, the way it would actually appear live on eBay.
+1. The exact title text (restate the "title" field value verbatim as the first line)
+2. Opening hook + style description in professional, brand-appropriate language
+3. Measurements (restate the measurements field here in clean bullet-style lines — the real looked-up numbers, not a placeholder)
+4. Fabric / material composition
+5. Condition statement (honest, specific — flaws called out plainly)
+6. SEO paragraph — naturally woven sentence(s) containing 15+ relevant search keywords (brand, style, size, color, fit, era, material, etc.), never presented as a bare keyword list
+7. Closing sign-off line, verbatim: "Find more quality men's clothing, outdoor gear, and collectibles at Courthouse Square Deals on eBay. Ships fast from Texas."
+Do not include a pricing mention or section labels like "Measurements:" as headers (other than the title line itself, which should stand alone as its own first line) — write it as flowing, clean, copy-paste-ready prose and bullets, the way it would actually appear live on eBay.
 
 Return ONLY valid JSON — no markdown, no code fences, no explanation. Use this exact structure:
 {
@@ -217,7 +218,7 @@ For title: Count the characters before finalizing. It MUST be 77-80 characters �
 For item_specifics: Only include fields relevant to this item. Leave any field blank ("") if not applicable or unknown — do NOT guess. Omit all section-label keys (the ones that look like "--- TOPS ---") from your response.
 For category/category_hint: The broad category can be approximate, but the category_hint should help eBay find the exact leaf category for whatever type of item this is.
 For all item types: include as many accurate specifics as the photos support, even for non-clothing items such as collectibles, media, home decor, toys, tools, sporting goods, art, kitchenware, and electronics accessories.
-Before returning the JSON, silently re-check: (1) is title length exactly 77-80 characters, (2) does condition honor the NWT gating rule, (3) is suggested_price the literal placeholder string, (4) does description follow the 6-part structure with the exact sign-off line. Fix anything that fails before responding.`;
+Before returning the JSON, silently re-check: (1) is title length exactly 77-80 characters, (2) does condition honor the NWT gating rule, (3) is suggested_price the literal placeholder string, (4) does description start with the title as its own first line, followed by the rest of the 7-part structure ending in the exact sign-off line, (5) are the measurements real looked-up numbers rather than "NEEDS VERIFICATION" — only allow that fallback if multiple genuine searches truly failed. Fix anything that fails before responding.`;
 
 export function buildProfiledAnalysisPrompt(profile: string): string {
   const normalized = normalizeItemProfile(profile);
