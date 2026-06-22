@@ -127,14 +127,15 @@ export async function POST(req: NextRequest) {
           model: ANALYSIS_MODEL,
           max_tokens: 3000,
           // Lets the model look up the brand's official size chart for
-          // measurements instead of estimating from photos. Capped to keep
-          // cost predictable — measurement lookups rarely need more than a
-          // couple of searches per item.
+          // measurements instead of estimating from photos. The prompt
+          // requires trying multiple query angles (brand site, retailer
+          // cache, general search) before giving up, so allow enough
+          // searches for that — cost per item is still small.
           tools: [
             {
               type: "web_search_20250305",
               name: "web_search",
-              max_uses: 3,
+              max_uses: 6,
             },
           ],
           // System prompt is large and identical across requests for the same
