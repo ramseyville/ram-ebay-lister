@@ -7,6 +7,7 @@ import {
   listingsToJson,
 } from "@/lib/export";
 import { buildBatchPricingUrl } from "@/lib/pricing-prompt";
+import { exportLedgerCsv, getAvailableMonths } from "@/lib/ledger";
 import type { ItemGroup, ListingResult, Photo } from "@/lib/types";
 
 interface ListingsViewProps {
@@ -19,7 +20,8 @@ interface ListingsViewProps {
   onPostAll: () => void;
   onBack: () => void;
   onSaveDraft: () => void;
-  lastSaved: number | null; // Date.now() of last save, or null
+  lastSaved: number | null;
+  onCostChange: (groupId: string, cost: number) => void; // Date.now() of last save, or null
 }
 
 export function ListingsView({
@@ -33,6 +35,7 @@ export function ListingsView({
   onBack,
   onSaveDraft,
   lastSaved,
+  onCostChange,
 }: ListingsViewProps) {
   const done      = groups.filter((g) => g.status === "done").length;
   const writing   = groups.filter((g) => g.status === "writing").length;
@@ -80,6 +83,15 @@ export function ListingsView({
             💰 Price all {done} items in Claude
           </a>
         )}
+
+        {/* Download month CSV */}
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => exportLedgerCsv()}
+        >
+          📥 Download month CSV
+        </button>
 
         {/* Draft save */}
         <button
@@ -130,6 +142,7 @@ export function ListingsView({
             onEdit={onEdit}
             onRetry={onRetry}
             onPost={onPost}
+            onCostChange={onCostChange}
           />
         ))}
       </div>
