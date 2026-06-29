@@ -89,6 +89,16 @@ Study each photo carefully:
 • Close-ups → look for logos, hardware details, monograms, serial numbers, maker marks, model numbers, edition info, signatures, stamps, and flaws
 • Packaging/manual/accessory shots → include only if clearly part of the item being sold
 • For clothing → determine gender from construction details, not assumptions. Button/zip orientation is the deciding signal when a garment could read as either: buttons on the wearer's RIGHT (right-over-left) = menswear, buttons on the wearer's LEFT (left-over-right) = womenswear. Use this to settle ambiguous polos, shirts, and jackets before writing the title.
+• For clothing → visually identify and ALWAYS fill in these item specifics from the photos — never leave them blank:
+  - SLEEVE LENGTH: Look at the arms. Long Sleeve | Short Sleeve | 3/4 Sleeve | Sleeveless | Cap Sleeve
+  - COLLAR STYLE: Examine the neckline closely. Button-Down | Polo | Spread | Point | Mandarin/Banded | Lapel | Shawl | No Collar | Crew Neck | V-Neck | Turtleneck | Mock Neck | Henley
+  - CLOSURE: Look at the front opening. Button | Full Zip | Half Zip | Pullover | Snap | Hook & Eye | No Closure
+  - CUFF STYLE (long-sleeve only): Examine the wrist area. Barrel | French/Double | Ribbed | Elastic | Snap | No Cuff
+  - FRONT STYLE (pants/trousers only): Look at the front of the pants. Flat Front | Pleated
+  - POCKET STYLE: Observe the pockets. No Pockets | Welt | Patch | Slash | Cargo | Zip | On Seam
+  - HOOD: Is there a hood? Yes - Fixed | Yes - Removable | No Hood
+  - FIT: Judge from the overall silhouette. Regular | Slim | Relaxed | Athletic Fit | Classic Fit | Modern Fit | Oversized
+  These are observable facts from photos — make a determination even if not 100% certain. Only use the exact values listed above.
 • For jewelry → identify exact jewelry type (ring, necklace, bracelet, earrings, brooch, pendant, charm, cufflinks, watch accessory, etc.), clasp/closure, main stone, metal/base metal, metal purity or hallmarks (925, 10K, 14K, etc.), signed/maker marks, approximate length, ring size, vintage/antique status, and whether it appears handmade
 • For hard goods → identify brand/maker, exact product type, model name/number, MPN/part number, serial number, UPC/ISBN/barcode if visible, material, dimensions, year/era, country of manufacture, compatibility, included accessories, power source/voltage, capacity, style, theme, character/franchise, pattern, production technique, and any maker marks or stamps
 
@@ -161,13 +171,16 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation. Use this
     "Game Name": "For video games only — leave blank if N/A",
     "Platform": "For video games only — leave blank if unknown",
     "Region Code": "For video games/media only — leave blank if unknown",
-    "Sleeve Length": "Short Sleeve, Long Sleeve, 3/4 Sleeve, Sleeveless, Cap Sleeve — leave blank if N/A",
-    "Neckline": "Crew Neck, V-Neck, Turtleneck, Cowl Neck, Off Shoulder, Mock Neck, Scoop Neck — leave blank if N/A",
-    "Fit": "Regular, Slim, Relaxed, Oversized, Athletic",
-    "Occasion": "Casual, Workwear, Athletic, Formal, Party, Outdoor, Ski, Hiking, etc.",
+    "Sleeve Length": "REQUIRED for all tops, shirts, sweaters, jackets — determine visually from photos. Accepted: Short Sleeve | Long Sleeve | 3/4 Sleeve | Sleeveless | Cap Sleeve",
+    "Neckline": "REQUIRED for all tops — determine from photos by examining the collar and neck opening. Accepted: Crew Neck | V-Neck | Turtleneck | Mock Neck | Cowl Neck | Scoop Neck | Boat Neck | Henley",
+    "Fit": "REQUIRED for all clothing — determine from the cut and silhouette visible in photos. Accepted: Regular | Slim | Relaxed | Athletic Fit | Straight | Classic Fit | Modern Fit | Oversized",
+    "Occasion": "REQUIRED for all clothing — infer from brand, style, and garment type. Accepted: Casual | Business | Business Casual | Formal | Athletic | Outdoor | Golf | Travel | Vacation | Beach",
     "Country/Region of Manufacture": "Country name if visible on tag — leave blank if not shown",
-    "Closure": "Button, Zip, Pull-On, Snap, Hook & Eye, Lace-Up — leave blank if N/A",
-    "Collar Style": "Button-Down, Polo, Mandarin, Shawl, Lapel, Stand, Spread — leave blank if N/A",
+    "Closure": "REQUIRED for shirts, jackets, pants — determine visually from photos. Accepted: Button | Full Zip | Half Zip | Pullover | Snap | Hook & Eye | Lace-Up | Magnetic | No Closure",
+    "Collar Style": "REQUIRED for all shirts and jackets — determine from photos by examining the collar shape. Accepted: Button-Down | Polo | Mandarin/Banded | Spread | Point | Lapel | Shawl | No Collar",
+    "Cuff Style": "REQUIRED for long-sleeve shirts and dress shirts — determine from photos. Accepted: Barrel | French/Double | Ribbed | Elastic | Snap | No Cuff",
+    "Front Style": "REQUIRED for dress pants, chinos, and trousers — determine from photos. Accepted: Flat Front | Pleated",
+    "Pocket Style": "For pants and jackets — determine from photos. Accepted: No Pockets | Welt | Patch | Slash | Cargo | Zip | On Seam",
     "Inseam": "Inseam measurement if visible on tag or ruler photo — leave blank if N/A",
     "Rise": "Low Rise, Mid Rise, High Rise — leave blank if N/A",
     "Leg Style": "Straight, Skinny, Bootcut, Flare, Wide Leg, Tapered, Jogger, Cargo — leave blank if N/A",
