@@ -5,6 +5,7 @@ import { apiPost } from "@/lib/api-client";
 import { resizeImage } from "@/lib/resize";
 import { buildSku } from "@/lib/sku";
 import { saveDraft, loadDraft, clearDraft, hasDraft, formatDraftAge } from "@/lib/storage";
+import { addToLedger } from "@/lib/ledger";
 import { estimateShipping } from "@/lib/shipping";
 import { EbayConnect } from "./EbayConnect";
 import { ReviewBoard } from "./ReviewBoard";
@@ -359,6 +360,23 @@ export default function Home() {
           error?: string;
         };
         if (!data.success) throw new Error(data.error || "eBay rejected the listing.");
+        // Add to monthly ledger
+        const postedGroup = groupsRef.current.find((g) => g.id === groupId);
+        if (postedGroup?.listing) {
+          const binPrice = parseFloat(String(postedGroup.listing.suggested_price || "0").replace(/[^0-9.]/g, ""));
+          if (!isNaN(binPrice) && binPrice > 0) {
+            addToLedger({
+              sku: postedGroup.sku,
+              title: postedGroup.listing.title,
+              brand: postedGroup.listing.brand,
+              size: postedGroup.listing.size,
+              condition: postedGroup.listing.condition,
+              itemCost: postedGroup.itemCost ?? 10,
+              binPrice,
+              listingId: data.listingId,
+            });
+          }
+        }
         setGroups((prev) =>
           prev.map((g) =>
             g.id === groupId
@@ -378,6 +396,12 @@ export default function Home() {
     },
     [photoMap]
   );
+
+  const handleCostChange = useCallback((groupId: string, cost: number) => {
+    setGroups((prev) =>
+      prev.map((g) => g.id === groupId ? { ...g, itemCost: cost } : g)
+    );
+  }, []);
 
   const postAll = async () => {
     const ready = groups
@@ -612,6 +636,7 @@ export default function Home() {
           onRetry={writeGroup}
           onPost={postGroup}
           onPostAll={postAll}
+          onCostChange={handleCostChange}
           onBack={() => setStep("review")}
           onSaveDraft={handleSaveDraft}
           lastSaved={lastSaved}
