@@ -6,6 +6,7 @@ import {
   listingsToCsv,
   listingsToJson,
 } from "@/lib/export";
+import { buildBatchPricingUrl } from "@/lib/pricing-prompt";
 import type { ItemGroup, ListingResult, Photo } from "@/lib/types";
 
 interface ListingsViewProps {
@@ -17,6 +18,8 @@ interface ListingsViewProps {
   onPost: (groupId: string) => void;
   onPostAll: () => void;
   onBack: () => void;
+  onSaveDraft: () => void;
+  lastSaved: number | null; // Date.now() of last save, or null
 }
 
 export function ListingsView({
@@ -28,16 +31,29 @@ export function ListingsView({
   onPost,
   onPostAll,
   onBack,
+  onSaveDraft,
+  lastSaved,
 }: ListingsViewProps) {
-  const done = groups.filter((g) => g.status === "done").length;
-  const writing = groups.filter((g) => g.status === "writing").length;
-  const failed = groups.filter((g) => g.status === "error").length;
-  const posted = groups.filter((g) => g.postStatus === "posted").length;
-  const posting = groups.some((g) => g.postStatus === "posting");
+  const done      = groups.filter((g) => g.status === "done").length;
+  const writing   = groups.filter((g) => g.status === "writing").length;
+  const failed    = groups.filter((g) => g.status === "error").length;
+  const posted    = groups.filter((g) => g.postStatus === "posted").length;
+  const posting   = groups.some((g) => g.postStatus === "posting");
   const readyToPost = groups.filter(
     (g) => g.status === "done" && g.postStatus !== "posted"
   ).length;
-  const allDone = writing === 0 && done > 0;
+  const allDone   = writing === 0 && done > 0;
+
+  const pricingUrl = buildBatchPricingUrl(groups);
+
+  function savedAgo(ts: number): string {
+    const diffMin = Math.floor((Date.now() - ts) / 60_000);
+    if (diffMin < 1) return "just now";
+    if (diffMin === 1) return "1 min ago";
+    if (diffMin < 60) return `${diffMin} min ago`;
+    const hr = Math.floor(diffMin / 60);
+    return `${hr} hr ago`;
+  }
 
   return (
     <section className="panel" aria-labelledby="listings-heading">
@@ -46,9 +62,38 @@ export function ListingsView({
         <span className="badge">
           {done}/{groups.length} ready
           {writing > 0 ? ` · ${writing} writing` : ""}
-          {failed > 0 ? ` · ${failed} failed` : ""}
-          {posted > 0 ? ` · ${posted} posted` : ""}
+          {failed > 0  ? ` · ${failed} failed`  : ""}
+          {posted > 0  ? ` · ${posted} posted`  : ""}
         </span>
+      </div>
+
+      {/* Batch action bar */}
+      <div className="batch-actions-bar">
+        {/* Pricing analysis — only show when there are done listings */}
+        {done > 0 && pricingUrl && (
+          <a
+            href={pricingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-secondary"
+          >
+            💰 Price all {done} items in Claude
+          </a>
+        )}
+
+        {/* Draft save */}
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={onSaveDraft}
+        >
+          💾 Save draft
+        </button>
+        {lastSaved !== null && (
+          <span className="draft-saved-note">
+            Saved {savedAgo(lastSaved)}
+          </span>
+        )}
       </div>
 
       {ebayConnected && readyToPost > 0 && (
