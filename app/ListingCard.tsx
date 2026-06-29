@@ -2,17 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ItemGroup, ListingResult, Photo } from "@/lib/types";
+import { formatShipping, estimateShipping } from "@/lib/shipping";
 
 const TITLE_LIMIT = 80;
 
 // eBay's pre-owned condition tiers, matching the values the model returns.
 const CONDITIONS: { value: string; label: string }[] = [
-  { value: "NEW_WITH_TAGS", label: "New with tags" },
-  { value: "NEW_NO_TAGS", label: "New without tags" },
-  { value: "EXCELLENT", label: "Pre-owned · Excellent" },
-  { value: "VERY_GOOD", label: "Pre-owned · Very good" },
-  { value: "GOOD", label: "Pre-owned · Good" },
-  { value: "FAIR", label: "Pre-owned · Fair" },
+  { value: "NEW_WITH_TAGS",  label: "New with tags" },
+  { value: "NEW_NO_TAGS",    label: "New without tags" },
+  { value: "EXCELLENT",      label: "Pre-owned · Excellent" },
+  { value: "VERY_GOOD",      label: "Pre-owned · Very good" },
+  { value: "GOOD",           label: "Pre-owned · Good" },
+  { value: "FAIR",           label: "Pre-owned · Fair" },
 ];
 
 function formatPrice(value: ListingResult["suggested_price"]): string {
@@ -69,6 +70,7 @@ export function ListingCard({
   onPost,
 }: ListingCardProps) {
   const [open, setOpen] = useState(true);
+  const [editingConditionNotes, setEditingConditionNotes] = useState(false);
   const listing = group.listing;
   const cover = photoById(group.photoIds[0]);
 
@@ -78,6 +80,16 @@ export function ListingCard({
   }, [listing?.item_specifics]);
 
   const titleLen = listing?.title?.length ?? 0;
+
+  // Shipping estimate
+  const shippingLine = useMemo(() => {
+    if (!listing) return null;
+    return formatShipping(listing);
+  }, [listing]);
+
+  // Condition notes: seller override takes precedence, falls back to AI-generated
+  const displayedConditionNotes =
+    listing?.condition_notes_override ?? listing?.condition_notes ?? "";
 
   return (
     <article className={`listing-card status-${group.status}`}>
@@ -178,7 +190,6 @@ export function ListingCard({
                 value={listing.condition ?? "GOOD"}
                 onChange={(e) => onEdit(group.id, { condition: e.target.value })}
               >
-                {/* Keep an unexpected model value selectable rather than losing it. */}
                 {listing.condition &&
                   !CONDITIONS.some((c) => c.value === listing.condition) && (
                     <option value={listing.condition}>
@@ -205,6 +216,54 @@ export function ListingCard({
               </div>
             )}
           </div>
+
+          {/* Condition Notes — editable */}
+          <div className="result-field">
+            <label>
+              Condition notes
+              <button
+                type="button"
+                className="btn-ghost inline-edit-toggle"
+                onClick={() => setEditingConditionNotes((v) => !v)}
+              >
+                {editingConditionNotes ? "Done" : "Edit"}
+              </button>
+            </label>
+            {editingConditionNotes ? (
+              <textarea
+                value={displayedConditionNotes}
+                rows={3}
+                placeholder="Add your own condition notes — visible in the description"
+                onChange={(e) =>
+                  onEdit(group.id, { condition_notes_override: e.target.value })
+                }
+              />
+            ) : (
+              <p className="condition-notes-display">
+                {displayedConditionNotes || (
+                  <span style={{ color: "var(--color-ink-faint)" }}>
+                    No condition notes — click Edit to add
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+
+          {/* Shipping estimate */}
+          {shippingLine && (
+            <div className="result-field shipping-estimate">
+              <label>Estimated shipping</label>
+              <p className="shipping-line">{shippingLine}</p>
+            </div>
+          )}
+
+          {/* Category */}
+          {listing.category_id && (
+            <div className="result-field">
+              <label>eBay category ID</label>
+              <p className="category-id">{listing.category_id}</p>
+            </div>
+          )}
 
           <div className="result-field">
             <label>Description</label>
