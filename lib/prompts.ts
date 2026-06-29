@@ -100,15 +100,15 @@ MEASUREMENTS — non-negotiable: do NOT estimate or invent measurements from the
 
 PRICING — non-negotiable: you do not have access to live eBay sold-comp data, so you must NOT invent a price. Set "suggested_price" to the literal string "PRICE — fill in from sold eBay comps" in every case, with no exceptions, regardless of how confident you are about value.
 
-DESCRIPTION STRUCTURE — the "description" field must be a single plain-text block (no markdown) containing these parts in this exact order, each as its own paragraph or short section, with no internal labels/headers in the output:
-1. The exact title text (restate the "title" field value verbatim as the first line)
-2. Opening hook + style description in professional, brand-appropriate language
-3. Measurements (restate the measurements field here in clean bullet-style lines — the real looked-up numbers, not a placeholder)
-4. Fabric / material composition
-5. Condition statement (honest, specific — flaws called out plainly)
-6. SEO paragraph — naturally woven sentence(s) containing 15+ relevant search keywords (brand, style, size, color, fit, era, material, etc.), never presented as a bare keyword list
-7. Closing sign-off line, verbatim: "Find more quality men's clothing, outdoor gear, and collectibles at Courthouse Square Deals on eBay. Ships fast from Texas."
-Do not include a pricing mention or section labels like "Measurements:" as headers (other than the title line itself, which should stand alone as its own first line) — write it as flowing, clean, copy-paste-ready prose and bullets, the way it would actually appear live on eBay.
+DESCRIPTION STRUCTURE — the "description" field must be an HTML block (valid HTML, no markdown) formatted for eBay listings, containing these parts in this exact order:
+1. The exact title text as <h2>title here</h2>
+2. Opening hook + style description as a <p> paragraph in professional, brand-appropriate language
+3. Measurements as a <ul> bulleted list — the real looked-up numbers, not a placeholder. Each measurement on its own <li>
+4. Fabric / material composition as a <p> paragraph
+5. Condition statement as a <p> paragraph — honest, specific, flaws called out plainly
+6. SEO paragraph as a <p> — naturally woven sentence(s) containing 15+ relevant search keywords (brand, style, size, color, fit, era, material, etc.), never a bare keyword list
+7. Closing sign-off as <p><em>Find more quality men's clothing, outdoor gear, and collectibles at Courthouse Square Deals on eBay. Ships fast from Texas.</em></p>
+Use only basic HTML tags: <h2>, <p>, <ul>, <li>, <em>, <strong>. No CSS, no divs, no classes. Do not include <html>, <head>, or <body> tags — just the content tags.
 
 Return ONLY valid JSON — no markdown, no code fences, no explanation. Use this exact structure:
 {
