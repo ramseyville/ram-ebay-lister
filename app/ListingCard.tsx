@@ -59,6 +59,7 @@ interface ListingCardProps {
   onEdit: (groupId: string, patch: Partial<ListingResult>) => void;
   onRetry: (groupId: string) => void;
   onPost: (groupId: string) => void;
+  onCostChange: (groupId: string, cost: number) => void;
 }
 
 export function ListingCard({
@@ -68,9 +69,11 @@ export function ListingCard({
   onEdit,
   onRetry,
   onPost,
+  onCostChange,
 }: ListingCardProps) {
   const [open, setOpen] = useState(true);
   const [editingConditionNotes, setEditingConditionNotes] = useState(false);
+  const [costInput, setCostInput] = useState(String((group.itemCost ?? 10).toFixed(2)));
   const [pricingOpen, setPricingOpen] = useState(false);
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingResult, setPricingResult] = useState<string | null>(null);
@@ -327,6 +330,31 @@ export function ListingCard({
                 ))}
               </div>
             </details>
+          )}
+
+          {/* Item cost field */}
+          {listing && (
+            <div className="cost-row">
+              <label className="cost-label" htmlFor={`cost-${group.id}`}>
+                My cost:
+              </label>
+              <span className="cost-prefix">$</span>
+              <input
+                id={`cost-${group.id}`}
+                type="number"
+                min="0"
+                step="0.01"
+                className="cost-input"
+                value={costInput}
+                onChange={(e) => setCostInput(e.target.value)}
+                onBlur={(e) => {
+                  const val = parseFloat(e.target.value);
+                  const clean = isNaN(val) ? 10 : Math.max(0, parseFloat(val.toFixed(2)));
+                  setCostInput(clean.toFixed(2));
+                  onCostChange(group.id, clean);
+                }}
+              />
+            </div>
           )}
 
           {/* Pricing analysis panel */}
