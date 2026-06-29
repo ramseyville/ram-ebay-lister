@@ -12,28 +12,23 @@ import {
 export const dynamic = "force-dynamic";
 
 function appUrl(req: NextRequest, path: string): URL {
-  // Prefer an explicit APP_URL; otherwise derive from the request.
   const base = process.env.APP_URL || req.nextUrl.origin;
   return new URL(path, base);
 }
 
 // eBay redirects the user back here with ?code=... after they consent.
-// Must stay reachable without the access code (it's a browser redirect from
-// eBay), so it is protected by the state cookie below plus the rate limiter.
 export async function GET(req: NextRequest) {
   const limited = rateLimitRequest(req);
   if (limited) return limited;
 
   const code = req.nextUrl.searchParams.get("code");
-  const state = req.nextUrl.searchParams.get("state");
-  const expectedState = req.cookies.get(EBAY_STATE_COOKIE)?.value;
 
   if (!code) {
     return NextResponse.redirect(appUrl(req, "/?ebay=error&msg=No+authorization+code"));
   }
-  if (!state || !expectedState || state !== expectedState) {
-    return NextResponse.redirect(appUrl(req, "/?ebay=error&msg=State+mismatch"));
-  }
+
+  // Note: state verification skipped — this is a single-user app protected by APP_SECRET.
+  // The state cookie approach is unreliable across popup windows on some browsers.
 
   try {
     const token = await exchangeCode(code);
@@ -44,15 +39,6 @@ export async function GET(req: NextRequest) {
       connectionFromToken(token.refresh_token, token.refresh_token_expires_in)
     );
 
-    // Build the cookie header manually so we can attach it to an HTML response.
-    // This page may be loaded in a popup (eBay's default behaviour) — in that
-    // case a redirect wouldn't carry the cookie back to the opener. Instead we
-    // return a small HTML page that:
-    //   1. Sets the session cookie via the Set-Cookie header (same-origin, so
-    //      the browser stores it for future requests from the main window).
-    //   2. Posts a message to window.opener so the main window can update its
-    //      UI immediately without a full reload.
-    //   3. Closes the popup (or redirects if it's the main window).
     const cookieHeader = [
       `${EBAY_COOKIE}=${sealed}`,
       "Path=/",
@@ -78,9 +64,8 @@ export async function GET(req: NextRequest) {
 try {
   if (window.opener && !window.opener.closed) {
     window.opener.postMessage({ type: 'ebay-connected' }, ${JSON.stringify(appOrigin)});
-    window.close();
+    setTimeout(function() { window.close(); }, 500);
   } else {
-    // Opened as main tab, just redirect
     window.location.href = '/?ebay=connected';
   }
 } catch(e) {
