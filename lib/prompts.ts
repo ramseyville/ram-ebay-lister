@@ -216,6 +216,30 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation. Use this
 
 For title: Count the characters before finalizing. It MUST be 77-80 characters — not "around" that range. Use the most searchable nouns: brand, item type, material, size, color, era, character, theme, or pattern when supported by the photos. No marketing adjectives.
 For item_specifics: Only include fields relevant to this item. Leave any field blank ("") if not applicable or unknown — do NOT guess. Omit all section-label keys (the ones that look like "--- TOPS ---") from your response.
+
+CRITICAL — eBay item specifics MUST use exact accepted values from the lists below or they will be rejected/ignored by eBay's system. Do not paraphrase, abbreviate, or invent values. Pick the closest exact match:
+
+Department: "Men" (never "Mens" or "Men's")
+Size Type: "Regular" | "Big & Tall" | "Slim" | "Athletic" | "Short" | "Tall"
+Fit: "Regular" | "Slim" | "Relaxed" | "Athletic Fit" | "Straight" | "Classic Fit" | "Modern Fit" | "Oversized"
+Sleeve Length: "Long Sleeve" | "Short Sleeve" | "3/4 Sleeve" | "Sleeveless" | "Cap Sleeve"
+Neckline: "Crew Neck" | "V-Neck" | "Turtleneck" | "Mock Neck" | "Cowl Neck" | "Scoop Neck" | "Boat Neck" | "Henley"
+Collar Style: "Button-Down" | "Polo" | "Mandarin/Banded" | "Spread" | "Point" | "Lapel" | "Shawl" | "No Collar"
+Closure: "Button" | "Full Zip" | "Half Zip" | "Pullover" | "Snap" | "Hook & Eye" | "Lace-Up" | "Magnetic" | "No Closure"
+Occasion: "Casual" | "Business" | "Business Casual" | "Formal" | "Athletic" | "Outdoor" | "Golf" | "Travel" | "Vacation" | "Beach"
+Season: "Spring" | "Summer" | "Fall" | "Winter" | "All Seasons"
+Pattern: "Solid" | "Striped" | "Plaid" | "Checkered" | "Floral" | "Geometric" | "Graphic" | "Paisley" | "Camouflage" | "Animal Print" | "Houndstooth" | "Herringbone" | "Tie-Dye" | "Abstract" | "Argyle"
+Performance/Activity: "Golf" | "Running" | "Training & Gym" | "Hiking & Outdoor" | "Fishing" | "Swimming" | "Cycling" | "Yoga" | "Hunting" | "Snow Sports"
+Leg Style: "Straight" | "Slim" | "Skinny" | "Bootcut" | "Flare" | "Wide Leg" | "Tapered" | "Jogger" | "Cargo" | "Relaxed"
+Rise: "Low Rise" | "Mid Rise" | "High Rise"
+Lining: "Lined" | "Unlined" | "Quilted Lining" | "Fleece Lining" | "Sherpa Lining" | "Mesh Lining"
+Hood: "Yes - Fixed" | "Yes - Removable" | "No Hood"
+Style (tops): "Casual" | "Athletic" | "Formal" | "Business Casual" | "Western" | "Preppy" | "Streetwear" | "Vintage" | "Bohemian" | "Workwear"
+Type (shirts): "Polo Shirt" | "T-Shirt" | "Dress Shirt" | "Henley Shirt" | "Button-Down Shirt" | "Camp Shirt" | "Oxford Shirt" | "Rugby Shirt" | "Flannel Shirt" | "Thermal Shirt"
+Type (outerwear): "Jacket" | "Vest" | "Puffer Jacket" | "Fleece Jacket" | "Rain Jacket" | "Windbreaker" | "Bomber Jacket" | "Blazer" | "Sport Coat" | "Pullover"
+Type (pants): "Chinos" | "Dress Pants" | "Cargo Pants" | "Joggers" | "Track Pants" | "Corduroy Pants" | "Linen Pants" | "Khakis" | "Sweatpants"
+Hat Style: "Baseball Cap" | "Beanie" | "Bucket Hat" | "Fedora" | "Snapback" | "Trucker Hat" | "Visor" | "Knit Cap" | "Cowboy Hat" | "Fitted Hat"
+Vintage: "Yes" | "No" (never blank — always include for clothing)
 For category/category_hint: The broad category can be approximate, but the category_hint should help eBay find the exact leaf category for whatever type of item this is.
 For all item types: include as many accurate specifics as the photos support, even for non-clothing items such as collectibles, media, home decor, toys, tools, sporting goods, art, kitchenware, and electronics accessories.
 Before returning the JSON, silently re-check: (1) is title length exactly 77-80 characters, (2) does condition honor the NWT gating rule, (3) is suggested_price the literal placeholder string, (4) does description start with the title as its own first line, followed by the rest of the 7-part structure ending in the exact sign-off line, (5) are the measurements real looked-up numbers rather than "NEEDS VERIFICATION" — only allow that fallback if multiple genuine searches truly failed. Fix anything that fails before responding.`;
