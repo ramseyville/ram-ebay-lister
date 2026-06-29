@@ -179,12 +179,13 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation. Use this
     "Closure": "REQUIRED for shirts, jackets, pants — determine visually from photos. Accepted: Button | Full Zip | Half Zip | Pullover | Snap | Hook & Eye | Lace-Up | Magnetic | No Closure",
     "Collar Style": "REQUIRED for all shirts and jackets — determine from photos by examining the collar shape. Accepted: Button-Down | Polo | Mandarin/Banded | Spread | Point | Lapel | Shawl | No Collar",
     "Cuff Style": "REQUIRED for long-sleeve shirts and dress shirts — determine from photos. Accepted: Barrel | French/Double | Ribbed | Elastic | Snap | No Cuff",
-    "Front Style": "REQUIRED for dress pants, chinos, and trousers — determine from photos. Accepted: Flat Front | Pleated",
+    "Front Type": "REQUIRED for all pants, trousers, chinos, jeans, and shorts — determine from photos by examining the waistband/fly area. Accepted: Flat Front | Pleated",
     "Pocket Style": "For pants and jackets — determine from photos. Accepted: No Pockets | Welt | Patch | Slash | Cargo | Zip | On Seam",
     "Inseam": "Inseam measurement if visible on tag or ruler photo — leave blank if N/A",
     "Rise": "Low Rise, Mid Rise, High Rise — leave blank if N/A",
     "Leg Style": "Straight, Skinny, Bootcut, Flare, Wide Leg, Tapered, Jogger, Cargo — leave blank if N/A",
     "Waist Size": "Numeric waist measurement if printed on tag — leave blank if N/A",
+    "Fabric Type": "REQUIRED for all clothing — the weave/construction of the fabric, determined from the tag or visual texture in photos. Accepted: Twill | Denim | Corduroy | Knit | Jersey | Fleece | Flannel | Chino | Canvas | Woven | Ripstop | Mesh | Terry | Velour | Satin | Chiffon | Lace. Do not leave blank — if uncertain from the tag, infer the most likely weave from the garment's visual texture and type.",
     "Skirt Length": "Mini, Knee-Length, Midi, Maxi — for skirts, dresses, and long sweaters; leave blank if N/A",
     "Dress Length": "Mini, Knee-Length, Midi, Maxi — for dresses only; leave blank if N/A",
     "Skirt Type": "A-Line, Pencil, Wrap, Pleated, Tiered — leave blank if N/A",
@@ -333,3 +334,4 @@ export function slugifyFolderName(raw: string): string {
   const cleaned = lowered.replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-");
   return cleaned.replace(/^-+|-+$/g, "") || "item";
 }
+
