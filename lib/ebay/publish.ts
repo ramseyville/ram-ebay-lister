@@ -694,6 +694,8 @@ export async function publishListing(
       returnPolicyId: setup.returnPolicyId,
     },
     includeCatalogProductDetails: false,
+    // Custom label = SKU so it appears and is editable in Seller Hub
+    storeFront: { customLabel: sku },
   };
 
   const postOffer = () =>
