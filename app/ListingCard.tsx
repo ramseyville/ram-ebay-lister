@@ -71,6 +71,44 @@ export function ListingCard({
 }: ListingCardProps) {
   const [open, setOpen] = useState(true);
   const [editingConditionNotes, setEditingConditionNotes] = useState(false);
+  const [pricingOpen, setPricingOpen] = useState(false);
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const [pricingResult, setPricingResult] = useState<string | null>(null);
+  const [pricingError, setPricingError] = useState<string | null>(null);
+
+  async function runPricingAnalysis() {
+    if (!listing) return;
+    setPricingOpen(true);
+    setPricingLoading(true);
+    setPricingResult(null);
+    setPricingError(null);
+    try {
+      // Select photos: front shot + last 3 (tags/labels/MSRP usually shot last)
+      const allPhotoIds = group.photoIds;
+      const selectedIds = Array.from(new Set([
+        allPhotoIds[0],                                    // front shot always
+        ...allPhotoIds.slice(-3),                          // last 3 = tags/labels/hang tag
+      ])).filter(Boolean).slice(0, 4);                     // max 4 photos
+
+      const photos = selectedIds
+        .map((id) => photoById(id))
+        .filter(Boolean)
+        .map((p) => ({ mediaType: p!.mediaType, data: p!.data }));
+
+      const res = await fetch("/api/pricing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listing, photos }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Pricing analysis failed.");
+      setPricingResult(data.analysis);
+    } catch (e) {
+      setPricingError((e as Error).message);
+    } finally {
+      setPricingLoading(false);
+    }
+  }
   const listing = group.listing;
   const cover = photoById(group.photoIds[0]);
 
@@ -289,6 +327,47 @@ export function ListingCard({
                 ))}
               </div>
             </details>
+          )}
+
+          {/* Pricing analysis panel */}
+          {listing && (
+            <div className="pricing-panel">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={runPricingAnalysis}
+                disabled={pricingLoading}
+              >
+                {pricingLoading ? (
+                  <><span className="spinner" aria-hidden="true" /> Analyzing pricing…</>
+                ) : (
+                  "💰 Get pricing analysis"
+                )}
+              </button>
+              {pricingOpen && (
+                <div className="pricing-result">
+                  {pricingLoading && (
+                    <p className="pricing-loading">Pulling eBay sold comps and analyzing photos…</p>
+                  )}
+                  {pricingError && (
+                    <p className="pricing-error">⚠️ {pricingError}</p>
+                  )}
+                  {pricingResult && (
+                    <div className="pricing-analysis">
+                      <div className="pricing-analysis-header">
+                        <strong>💰 Pricing Analysis</strong>
+                        <button
+                          type="button"
+                          className="btn-close-small"
+                          onClick={() => { setPricingOpen(false); setPricingResult(null); }}
+                        >✕</button>
+                      </div>
+                      <pre className="pricing-text">{pricingResult}</pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {/* eBay posting */}
