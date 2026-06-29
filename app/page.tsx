@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiPost } from "@/lib/api-client";
 import { resizeImage } from "@/lib/resize";
 import { buildSku } from "@/lib/sku";
+import { saveDraft, loadDraft, clearDraft, hasDraft, formatDraftAge } from "@/lib/storage";
+import { estimateShipping } from "@/lib/shipping";
 import { EbayConnect } from "./EbayConnect";
 import { ReviewBoard } from "./ReviewBoard";
 import { ListingsView } from "./ListingsView";
@@ -72,6 +74,8 @@ export default function Home() {
   const [sorting, setSorting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ebayConnected, setEbayConnected] = useState(false);
+  const [lastSaved, setLastSaved] = useState<number | null>(null);
+  const [draftMeta, setDraftMeta] = useState<ReturnType<typeof hasDraft>>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const photoMap = useMemo(() => {
@@ -98,6 +102,23 @@ export default function Home() {
     const onFocus = () => check();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
+  // Listen for eBay connection completion from the popup window
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === "ebay-connected") {
+        setEbayConnected(true);
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
+  // Check for a saved draft on mount
+  useEffect(() => {
+    const meta = hasDraft();
+    if (meta) setDraftMeta(meta);
   }, []);
 
   // ── Upload ──────────────────────────────────────────────
@@ -248,10 +269,39 @@ export default function Home() {
         if (!data.ok || !data.listing) {
           throw new Error(data.error || "Could not write this listing.");
         }
+
+        // Enrich the listing with shipping estimate
+        const shippingEst = estimateShipping(data.listing);
+        const enrichedListing: ListingResult = {
+          ...data.listing,
+          shipping_weight_oz: shippingEst.weight_oz,
+          shipping_dimensions: shippingEst.dimensions,
+        };
+
+        // Attempt eBay category ID lookup via Taxonomy API (best-effort,
+        // requires eBay dev keys — silently skips if not configured)
+        let finalListing = enrichedListing;
+        try {
+          const hint = enrichedListing.category_hint || enrichedListing.title || "";
+          if (hint && !enrichedListing.category_id) {
+            const catRes = await fetch(
+              `/api/ebay/taxonomy?q=${encodeURIComponent(hint)}`
+            );
+            if (catRes.ok) {
+              const catData = (await catRes.json()) as { categoryId?: string };
+              if (catData.categoryId) {
+                finalListing = { ...enrichedListing, category_id: catData.categoryId };
+              }
+            }
+          }
+        } catch {
+          // Category lookup is best-effort — never fail a write because of it
+        }
+
         setGroups((prev) =>
           prev.map((g) =>
             g.id === groupId
-              ? { ...g, status: "done", listing: data.listing }
+              ? { ...g, status: "done", listing: finalListing }
               : g
           )
         );
@@ -339,6 +389,30 @@ export default function Home() {
     }
   };
 
+  const handleSaveDraft = useCallback(() => {
+    const ok = saveDraft(groups, photos, binPrefix, step);
+    if (ok) {
+      const now = Date.now();
+      setLastSaved(now);
+      setDraftMeta(hasDraft());
+    }
+  }, [groups, photos, binPrefix, step]);
+
+  const handleRestoreDraft = useCallback(() => {
+    const draft = loadDraft();
+    if (!draft) return;
+    setGroups(draft.groups);
+    setPhotos(draft.photos);
+    setBinPrefix(draft.meta.binPrefix);
+    setStep(draft.meta.step);
+    setDraftMeta(null);
+  }, []);
+
+  const handleDiscardDraft = useCallback(() => {
+    clearDraft();
+    setDraftMeta(null);
+  }, []);
+
   const usableGroups = useMemo(
     () => groups.filter((g) => g.photoIds.length > 0),
     [groups]
@@ -360,6 +434,32 @@ export default function Home() {
 
       {step === "upload" && (
         <>
+          {/* Draft restore banner */}
+          {draftMeta && (
+            <div className="draft-banner" role="alert">
+              <span>
+                📂 You have a saved draft from {formatDraftAge(draftMeta.savedAt)} —{" "}
+                {draftMeta.itemCount} item{draftMeta.itemCount !== 1 ? "s" : ""},
+                {" "}{draftMeta.photoCount} photo{draftMeta.photoCount !== 1 ? "s" : ""}
+              </span>
+              <div className="draft-banner-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleRestoreDraft}
+                >
+                  Restore draft
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={handleDiscardDraft}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
           <section className="hero">
             <h2>
               Dump every photo. <em>We&rsquo;ll sort it out.</em>
@@ -513,6 +613,8 @@ export default function Home() {
           onPost={postGroup}
           onPostAll={postAll}
           onBack={() => setStep("review")}
+          onSaveDraft={handleSaveDraft}
+          lastSaved={lastSaved}
         />
       )}
 
