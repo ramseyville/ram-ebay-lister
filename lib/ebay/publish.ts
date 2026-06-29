@@ -130,6 +130,7 @@ const ASPECT_DEFAULTS: Record<string, string> = {
   "Strap Type": "Adjustable", "Hat Style": "Baseball Cap", "Brim Style": "Curved Bill",
   "Size Type": "Regular", Size: "Regular", Style: "Casual", Department: "Unisex Adult",
   Type: "Item", Brand: "Unbranded", Color: "Multicolor", Material: "Mixed Materials",
+  Handmade: "No", Personalize: "No", Personalized: "No",
 };
 
 // ── eBay REST client (token-authed) ──────────────────────────────────────────
@@ -296,12 +297,11 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
     aspects.Department = [departmentForCategory(catKey)];
   }
 
-  if (PANTS_CATEGORIES.has(catKey)) {
-    const m = String(listing.measurements || "").trim();
-    if (m && m.toLowerCase() !== "see listing photos for measurements") {
-      aspects.Inseam = [m.slice(0, 30)];
-    }
-  }
+  // Note: Inseam/Waist Size are populated below from listing.item_specifics
+  // (Claude's structured per-field measurement values), not from the
+  // free-text `measurements` summary blob — that's a paragraph for buyers,
+  // not a single field value, and dumping it into an aspect produces garbage
+  // like "Per official Vans Women's Bott..." in dropdown fields.
 
   // Merge in the model-provided item specifics (skip blanks + section labels).
   for (const [k, v] of Object.entries(listing.item_specifics || {})) {
@@ -365,7 +365,16 @@ function freeTextDefault(name: string, listing: ListingResult): string {
   return "";
 }
 
-// Make every REQUIRED aspect present and valid. Mutates `aspects` in place.
+// Aspects that should always default to "No" unless the listing explicitly
+// says otherwise — the model has no business inventing custom/handmade items.
+const FORCE_NO_ASPECTS = new Set(["Handmade", "Personalize", "Personalized"]);
+
+// Make every aspect present in eBay's metadata valid — not just required ones.
+// SELECTION_ONLY aspects must always be coerced to an allowed value, whether
+// or not eBay marks them required, otherwise the model's free-text guess
+// (e.g. "Per official Vans Women's Bott...") gets dumped straight into a
+// dropdown field and silently rejected or shown as raw garbage. Mutates
+// `aspects` in place.
 function reconcileAspects(
   aspects: Record<string, string[]>,
   meta: AspectMeta[],
@@ -373,19 +382,49 @@ function reconcileAspects(
   catKey: string
 ): void {
   for (const a of meta) {
-    if (!a.required || !a.name) continue;
+    if (!a.name) continue;
     const current = aspects[a.name]?.[0];
 
+    // Force Handmade/Personalize to "No" regardless of what the model put there.
+    if (FORCE_NO_ASPECTS.has(a.name)) {
+      const noValue = matchAllowed("No", a.values) || (a.mode === "SELECTION_ONLY" ? a.values[0] : "No");
+      if (noValue) aspects[a.name] = [noValue];
+      continue;
+    }
+
     if (a.mode === "SELECTION_ONLY") {
-      // Must be one of eBay's allowed values, or the publish 25002-fails.
+      // Multi-value aspects (e.g. Features) — match each candidate value
+      // independently against eBay's allowed list, keep only real matches.
+      const currentAll = aspects[a.name] || [];
+      if (currentAll.length > 1) {
+        const matched = currentAll
+          .map((v) => matchAllowed(v, a.values))
+          .filter((v): v is string => Boolean(v));
+        const unique = Array.from(new Set(matched));
+        if (unique.length) {
+          aspects[a.name] = unique;
+          continue;
+        }
+        // None of the model's guesses were real eBay values — fall through
+        // to the single-value resolution below (default/required handling).
+      }
+
+      // Must be one of eBay's allowed values, or the publish 25002-fails /
+      // a nonsense free-text value gets forced into a dropdown.
       const canonical =
         matchAllowed(current || "", a.values) ||
         matchAllowed(ASPECT_DEFAULTS[a.name] || "", a.values) ||
         (a.name === "Department" ? pickDepartment(a.values, listing, catKey) : "") ||
-        a.values[0] ||
+        (a.required ? a.values[0] : "") ||
         "";
-      if (canonical) aspects[a.name] = [canonical];
-    } else if (!current) {
+      if (canonical) {
+        aspects[a.name] = [canonical];
+      } else if (!a.required && current) {
+        // No match found and not required — drop the bogus value rather than
+        // publish junk into a dropdown-only field.
+        delete aspects[a.name];
+      }
+    } else if (a.required && !current) {
       // FREE_TEXT and unset — fill from the listing or a sensible default.
       const v = freeTextDefault(a.name, listing) || ASPECT_DEFAULTS[a.name] || a.values[0] || "";
       const clipped = clipAspectValue(v);
