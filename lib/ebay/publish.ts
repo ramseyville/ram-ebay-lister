@@ -613,6 +613,25 @@ export async function publishListing(
   }
   const condCandidates = conditionCandidates(listing.condition, acceptedConds);
   const condition = condCandidates[0] || "USED_EXCELLENT";
+  // Build packageWeightAndSize from the listing's estimated shipping data.
+  // eBay requires weight for most categories (error 25020 if missing).
+  const weightOz = listing.shipping_weight_oz ?? 16; // default 1 lb if not estimated
+  const lbs = Math.floor(weightOz / 16);
+  const oz = weightOz % 16;
+  const dims = listing.shipping_dimensions;
+  const packageWeightAndSize: any = {
+    weight: { value: lbs + oz / 16, unit: "POUND" },
+    packageType: dims && dims.height <= 1 ? "LETTER" : "PACKAGE_THICK_ENVELOPE",
+  };
+  if (dims) {
+    packageWeightAndSize.dimensions = {
+      length: dims.length,
+      width: dims.width,
+      height: dims.height,
+      unit: "INCH",
+    };
+  }
+
   const inventoryItem: any = {
     product: {
       title: String(listing.title || "Untitled").slice(0, 80),
@@ -623,6 +642,7 @@ export async function publishListing(
     condition,
     conditionDescription: listing.condition_notes || "",
     availability: { shipToLocationAvailability: { quantity: 1 } },
+    packageWeightAndSize,
   };
 
   const putInventory = () =>
