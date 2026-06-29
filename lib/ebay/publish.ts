@@ -494,10 +494,22 @@ export interface AccountSetup {
   locationKey: string;
 }
 
+// The fulfillment policy to use — must match the name in eBay → Account → Business policies.
+const FULFILLMENT_POLICY_NAME = "CALCULATED: USPS GAdv, USPS Priority";
+
 function pickFirstPolicy(r: EbayResp, listKey: string, idField: string): string {
   if (!r.ok) return "";
   const list = r.json?.[listKey] || [];
   return list.length ? String(list[0][idField] || "") : "";
+}
+
+function pickNamedFulfillmentPolicy(r: EbayResp): string {
+  if (!r.ok) return "";
+  const list: any[] = r.json?.fulfillmentPolicies || [];
+  // Prefer the exact named policy; fall back to first in list.
+  const match = list.find((p) => (p.name || "").trim() === FULFILLMENT_POLICY_NAME);
+  const chosen = match || list[0];
+  return chosen ? String(chosen.fulfillmentPolicyId || "") : "";
 }
 
 export async function fetchAccountSetup(accessToken: string): Promise<AccountSetup> {
@@ -508,7 +520,7 @@ export async function fetchAccountSetup(accessToken: string): Promise<AccountSet
     ebayRequest(accessToken, "GET", `${EBAY_ACC_BASE}/return_policy?${mp}`),
   ]);
   return {
-    fulfillmentPolicyId: pickFirstPolicy(ful, "fulfillmentPolicies", "fulfillmentPolicyId"),
+    fulfillmentPolicyId: pickNamedFulfillmentPolicy(ful),
     paymentPolicyId: pickFirstPolicy(pay, "paymentPolicies", "paymentPolicyId"),
     returnPolicyId: pickFirstPolicy(ret, "returnPolicies", "returnPolicyId"),
     locationKey: await fetchOrCreateLocation(accessToken),
@@ -834,3 +846,4 @@ async function publishOfferWithRecovery(
     error: `Publish failed (${r.status}): ${r.text.slice(0, 300)}`,
   };
 }
+
