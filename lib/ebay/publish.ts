@@ -131,6 +131,7 @@ const ASPECT_DEFAULTS: Record<string, string> = {
   "Size Type": "Regular", Size: "Regular", Style: "Casual", Department: "Unisex Adult",
   Type: "Item", Brand: "Unbranded", Color: "Multicolor", Material: "Mixed Materials",
   Handmade: "No", Personalize: "No", Personalized: "No",
+  "Front Type": "Flat Front", "Fabric Type": "Woven",
 };
 
 // ── eBay REST client (token-authed) ──────────────────────────────────────────
@@ -303,9 +304,16 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
   // not a single field value, and dumping it into an aspect produces garbage
   // like "Per official Vans Women's Bott..." in dropdown fields.
 
+  // Some aspect names the model might emit aren't real eBay aspects — map
+  // them to the correct name instead of creating a stray field eBay ignores.
+  const ASPECT_NAME_ALIASES: Record<string, string> = {
+    "Front Style": "Front Type",
+  };
+
   // Merge in the model-provided item specifics (skip blanks + section labels).
-  for (const [k, v] of Object.entries(listing.item_specifics || {})) {
-    if (!k || k.startsWith("---")) continue;
+  for (const [rawKey, v] of Object.entries(listing.item_specifics || {})) {
+    if (!rawKey || rawKey.startsWith("---")) continue;
+    const k = ASPECT_NAME_ALIASES[rawKey] || rawKey;
     const val = clipAspectValue(singleValue(v));
     if (val && !aspects[k]) aspects[k] = [val];
   }
@@ -375,15 +383,21 @@ const FORCE_NO_ASPECTS = new Set(["Handmade", "Personalize", "Personalized"]);
 // (e.g. "Per official Vans Women's Bott...") gets dumped straight into a
 // dropdown field and silently rejected or shown as raw garbage. Mutates
 // `aspects` in place.
+// Aspects Mark wants always populated for pants, regardless of whether eBay's
+// own metadata marks them required for the leaf category.
+const ALWAYS_FILL_FOR_PANTS = new Set(["Front Type", "Fabric Type"]);
+
 function reconcileAspects(
   aspects: Record<string, string[]>,
   meta: AspectMeta[],
   listing: ListingResult,
   catKey: string
 ): void {
+  const isPants = PANTS_CATEGORIES.has(catKey) || catKey === "mens_pants" || catKey === "womens_pants";
   for (const a of meta) {
     if (!a.name) continue;
     const current = aspects[a.name]?.[0];
+    const mustFill = a.required || (isPants && ALWAYS_FILL_FOR_PANTS.has(a.name));
 
     // Force Handmade/Personalize to "No" regardless of what the model put there.
     if (FORCE_NO_ASPECTS.has(a.name)) {
@@ -415,16 +429,16 @@ function reconcileAspects(
         matchAllowed(current || "", a.values) ||
         matchAllowed(ASPECT_DEFAULTS[a.name] || "", a.values) ||
         (a.name === "Department" ? pickDepartment(a.values, listing, catKey) : "") ||
-        (a.required ? a.values[0] : "") ||
+        (mustFill ? a.values[0] : "") ||
         "";
       if (canonical) {
         aspects[a.name] = [canonical];
-      } else if (!a.required && current) {
+      } else if (!mustFill && current) {
         // No match found and not required — drop the bogus value rather than
         // publish junk into a dropdown-only field.
         delete aspects[a.name];
       }
-    } else if (a.required && !current) {
+    } else if (mustFill && !current) {
       // FREE_TEXT and unset — fill from the listing or a sensible default.
       const v = freeTextDefault(a.name, listing) || ASPECT_DEFAULTS[a.name] || a.values[0] || "";
       const clipped = clipAspectValue(v);
