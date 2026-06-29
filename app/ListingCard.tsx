@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ItemGroup, ListingResult, Photo } from "@/lib/types";
 import { formatShipping, estimateShipping } from "@/lib/shipping";
+import { apiPost } from "@/lib/api-client";
 
 const TITLE_LIMIT = 80;
 
@@ -98,11 +99,7 @@ export function ListingCard({
         .filter(Boolean)
         .map((p) => ({ mediaType: p!.mediaType, data: p!.data }));
 
-      const res = await fetch("/api/pricing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listing, photos }),
-      });
+      const res = await apiPost("/api/pricing", { listing, photos });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Pricing analysis failed.");
       setPricingResult(data.analysis);
@@ -444,3 +441,4 @@ export function ListingCard({
     </article>
   );
 }
+
