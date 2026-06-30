@@ -24,6 +24,11 @@ interface ListingsViewProps {
   onCostChange: (groupId: string, cost: number) => void; // Date.now() of last save, or null
   onRenameSku: (groupId: string, sku: string) => void;
   onUndoPosted: (groupId: string) => void;
+  onUpdateLivePrice: (
+    groupId: string,
+    sku: string,
+    price: number
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 export function ListingsView({
@@ -40,6 +45,7 @@ export function ListingsView({
   onCostChange,
   onRenameSku,
   onUndoPosted,
+  onUpdateLivePrice,
 }: ListingsViewProps) {
   const done      = groups.filter((g) => g.status === "done").length;
   const writing   = groups.filter((g) => g.status === "writing").length;
@@ -149,6 +155,7 @@ export function ListingsView({
             onCostChange={onCostChange}
             onRenameSku={onRenameSku}
             onUndoPosted={onUndoPosted}
+            onUpdateLivePrice={onUpdateLivePrice}
           />
         ))}
       </div>
