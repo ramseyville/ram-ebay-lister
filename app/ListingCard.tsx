@@ -63,6 +63,11 @@ interface ListingCardProps {
   onCostChange: (groupId: string, cost: number) => void;
   onRenameSku: (groupId: string, sku: string) => void;
   onUndoPosted: (groupId: string) => void;
+  onUpdateLivePrice: (
+    groupId: string,
+    sku: string,
+    price: number
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 export function ListingCard({
@@ -75,6 +80,7 @@ export function ListingCard({
   onCostChange,
   onRenameSku,
   onUndoPosted,
+  onUpdateLivePrice,
 }: ListingCardProps) {
   const [open, setOpen] = useState(true);
   const [editingConditionNotes, setEditingConditionNotes] = useState(false);
@@ -83,6 +89,13 @@ export function ListingCard({
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingResult, setPricingResult] = useState<string | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
+  const [livePriceInput, setLivePriceInput] = useState(
+    priceToInput(group.listing?.suggested_price)
+  );
+  const [priceUpdateStatus, setPriceUpdateStatus] = useState<"idle" | "saving" | "done" | "error">(
+    "idle"
+  );
+  const [priceUpdateError, setPriceUpdateError] = useState("");
 
   async function runPricingAnalysis() {
     if (!listing) return;
@@ -411,32 +424,86 @@ export function ListingCard({
 
           {/* eBay posting */}
           {group.postStatus === "posted" ? (
-            <p className="post-result ok">
-              ✅ Posted to eBay
-              {group.listingId ? (
-                <>
-                  {" "}
-                  ·{" "}
-                  <a
-                    href={`https://www.ebay.com/itm/${group.listingId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    View listing ↗
-                  </a>
-                </>
-              ) : null}
-              {" "}
-              ·{" "}
-              <button
-                type="button"
-                className="btn-link-inline"
-                onClick={() => onUndoPosted(group.id)}
-                title="If this didn't actually go live as its own listing (e.g. it shares a SKU another item already used), clear this status so you can post it again."
-              >
-                Not actually posted? Undo
-              </button>
-            </p>
+            <div className="post-result ok">
+              <p style={{ margin: 0 }}>
+                ✅ Posted to eBay
+                {group.listingId ? (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <a
+                      href={`https://www.ebay.com/itm/${group.listingId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      View listing ↗
+                    </a>
+                  </>
+                ) : null}
+                {" "}
+                ·{" "}
+                <button
+                  type="button"
+                  className="btn-link-inline"
+                  onClick={() => onUndoPosted(group.id)}
+                  title="If this didn't actually go live as its own listing (e.g. it shares a SKU another item already used), clear this status so you can post it again."
+                >
+                  Not actually posted? Undo
+                </button>
+              </p>
+              <div className="post-row" style={{ marginTop: "0.5rem" }}>
+                <div className="price-input">
+                  <span>$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={livePriceInput}
+                    onChange={(e) => setLivePriceInput(e.target.value.replace(/[^0-9.]/g, ""))}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={priceUpdateStatus === "saving"}
+                  onClick={async () => {
+                    const value = parseFloat(livePriceInput);
+                    if (!Number.isFinite(value) || value <= 0) {
+                      setPriceUpdateStatus("error");
+                      setPriceUpdateError("Enter a valid price.");
+                      return;
+                    }
+                    setPriceUpdateStatus("saving");
+                    setPriceUpdateError("");
+                    const res = await onUpdateLivePrice(group.id, group.sku, value);
+                    if (res.success) {
+                      setPriceUpdateStatus("done");
+                      setTimeout(() => setPriceUpdateStatus("idle"), 2500);
+                    } else {
+                      setPriceUpdateStatus("error");
+                      setPriceUpdateError(res.error || "Update failed.");
+                    }
+                  }}
+                >
+                  {priceUpdateStatus === "saving" ? (
+                    <>
+                      <span className="spinner" aria-hidden="true" /> Updating…
+                    </>
+                  ) : (
+                    "💲 Update price on eBay"
+                  )}
+                </button>
+              </div>
+              {priceUpdateStatus === "done" && (
+                <p className="post-result ok" style={{ marginTop: "0.35rem" }}>
+                  ✅ Price updated on eBay
+                </p>
+              )}
+              {priceUpdateStatus === "error" && (
+                <p className="post-result err" style={{ marginTop: "0.35rem" }}>
+                  ⚠️ {priceUpdateError}
+                </p>
+              )}
+            </div>
           ) : ebayConnected ? (
             <div className="post-row">
               <button
