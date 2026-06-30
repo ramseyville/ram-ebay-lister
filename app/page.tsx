@@ -238,16 +238,27 @@ export default function Home() {
     });
 
   const addGroup = () =>
-    setGroups((prev) => [
-      ...prev,
-      {
-        id: newId(),
-        sku: buildSku(binPrefix, prev.length),
-        name: `new-item-${prev.length + 1}`,
-        photoIds: [],
-        status: "idle",
-      },
-    ]);
+    setGroups((prev) => {
+      const existingSkus = new Set(prev.map((g) => g.sku));
+      let idx = prev.length;
+      let sku = buildSku(binPrefix, idx);
+      // Deleting items can free up an index buildSku would reuse — keep
+      // advancing until we land on a SKU that isn't already taken.
+      while (existingSkus.has(sku)) {
+        idx += 1;
+        sku = buildSku(binPrefix, idx);
+      }
+      return [
+        ...prev,
+        {
+          id: newId(),
+          sku,
+          name: `new-item-${prev.length + 1}`,
+          photoIds: [],
+          status: "idle",
+        },
+      ];
+    });
 
   // ── Write listings ──────────────────────────────────────
   const writeGroup = useCallback(
@@ -339,6 +350,34 @@ export default function Home() {
     async (groupId: string) => {
       const group = groupsRef.current.find((g) => g.id === groupId);
       if (!group || !group.listing) return;
+
+      const sku = (group.sku || "").trim();
+      if (!sku) {
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.id === groupId
+              ? { ...g, postStatus: "error", postError: "This item has no SKU — add one before posting." }
+              : g
+          )
+        );
+        return;
+      }
+      const duplicate = groupsRef.current.find((g) => g.id !== groupId && (g.sku || "").trim() === sku);
+      if (duplicate) {
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.id === groupId
+              ? {
+                  ...g,
+                  postStatus: "error",
+                  postError: `SKU "${sku}" is also used by "${duplicate.name}" — eBay will merge these into one listing. Give each item a unique SKU before posting.`,
+                }
+              : g
+          )
+        );
+        return;
+      }
+
       const images = group.photoIds
         .map((id) => photoMap.get(id))
         .filter((p): p is Photo => Boolean(p))
