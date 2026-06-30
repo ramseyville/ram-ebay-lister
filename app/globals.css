@@ -768,6 +768,22 @@ textarea {
   cursor: not-allowed;
 }
 
+.btn-link-inline {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 0.85em;
+  color: var(--color-ink-faint);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.btn-link-inline:hover {
+  color: var(--color-accent-deep);
+}
+
 .board-empty {
   color: var(--color-ink-faint);
   font-size: 0.88rem;
