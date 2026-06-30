@@ -61,6 +61,7 @@ interface ListingCardProps {
   onRetry: (groupId: string) => void;
   onPost: (groupId: string) => void;
   onCostChange: (groupId: string, cost: number) => void;
+  onRenameSku: (groupId: string, sku: string) => void;
 }
 
 export function ListingCard({
@@ -71,6 +72,7 @@ export function ListingCard({
   onRetry,
   onPost,
   onCostChange,
+  onRenameSku,
 }: ListingCardProps) {
   const [open, setOpen] = useState(true);
   const [editingConditionNotes, setEditingConditionNotes] = useState(false);
@@ -138,7 +140,17 @@ export function ListingCard({
         )}
         <div className="listing-card-title">
           <strong>
-            {group.sku && <span className="sku-tag">{group.sku}</span>}
+            {group.sku !== undefined && (
+              <input
+                type="text"
+                className="sku-tag sku-tag-input"
+                value={group.sku}
+                aria-label="Item SKU / custom label"
+                disabled={group.postStatus === "posted"}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => onRenameSku(group.id, e.target.value)}
+              />
+            )}
             {listing?.title || group.name}
           </strong>
           <span className="listing-card-sub">
@@ -441,4 +453,5 @@ export function ListingCard({
     </article>
   );
 }
+
 
