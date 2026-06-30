@@ -651,6 +651,7 @@ export default function Home() {
           onPost={postGroup}
           onPostAll={postAll}
           onCostChange={handleCostChange}
+          onRenameSku={renameSku}
           onBack={() => setStep("review")}
           onSaveDraft={handleSaveDraft}
           lastSaved={lastSaved}
