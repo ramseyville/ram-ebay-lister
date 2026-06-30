@@ -589,6 +589,20 @@ export default function Home() {
                   <>🔀 Sort {photos.length || ""} photos into items</>
                 )}
               </button>
+              {photos.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setPhotos([]);
+                    setGroups([]);
+                    clearDraft();
+                    if (inputRef.current) inputRef.current.value = "";
+                  }}
+                >
+                  🗑 Clear all photos
+                </button>
+              )}
             </div>
 
             {error && (
@@ -650,3 +664,4 @@ export default function Home() {
     </main>
   );
 }
+
