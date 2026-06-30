@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiPost } from "@/lib/api-client";
 import { resizeImage } from "@/lib/resize";
-import { buildSku } from "@/lib/sku";
+import { buildSku, nextSuffix } from "@/lib/sku";
 import { saveDraft, loadDraft, clearDraft, hasDraft, formatDraftAge } from "@/lib/storage";
 import { addToLedger } from "@/lib/ledger";
 import { estimateShipping } from "@/lib/shipping";
@@ -205,10 +205,34 @@ export default function Home() {
       prev.map((g) => (g.id === groupId ? { ...g, name } : g))
     );
 
+  // If the typed SKU collides with another item already in the batch, treat
+  // it as a shared label (like a bin prefix) and auto-suffix it — e.g. typing
+  // "CLOSET" on three jackets becomes CLOSET-A, CLOSET-B, CLOSET-C instead of
+  // three items silently merging into one eBay listing.
   const renameSku = (groupId: string, sku: string) =>
-    setGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, sku } : g))
-    );
+    setGroups((prev) => {
+      const trimmed = sku.trim();
+      const others = prev.filter((g) => g.id !== groupId);
+      const collides = trimmed && others.some((g) => g.sku.trim() === trimmed);
+      if (!collides) {
+        return prev.map((g) => (g.id === groupId ? { ...g, sku } : g));
+      }
+      const taken = new Set(others.map((g) => g.sku.trim()));
+      let n = 1;
+      let candidate = `${trimmed}-${nextSuffix(n - 1)}`;
+      // Also reserve the bare label for the very first item that claims it,
+      // so a single jacket typed as "CLOSET" doesn't get an unnecessary
+      // suffix unless a second one collides with it.
+      if (!taken.has(trimmed)) {
+        candidate = trimmed;
+      } else {
+        while (taken.has(candidate)) {
+          n += 1;
+          candidate = `${trimmed}-${nextSuffix(n - 1)}`;
+        }
+      }
+      return prev.map((g) => (g.id === groupId ? { ...g, sku: candidate } : g));
+    });
 
   const movePhoto = (photoId: string, toGroupId: string | "orphans") => {
     setGroups((prev) =>
