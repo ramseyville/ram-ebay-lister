@@ -470,6 +470,28 @@ export default function Home() {
     );
   }, []);
 
+  const updateLivePrice = useCallback(
+    async (groupId: string, sku: string, price: number): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const res = await apiPost("/api/ebay/update-price", { sku, price });
+        const data = (await res.json()) as { success: boolean; error?: string };
+        if (data.success) {
+          setGroups((prev) =>
+            prev.map((g) =>
+              g.id === groupId && g.listing
+                ? { ...g, listing: { ...g.listing, suggested_price: price } }
+                : g
+            )
+          );
+        }
+        return data;
+      } catch (e) {
+        return { success: false, error: (e as Error).message };
+      }
+    },
+    []
+  );
+
   const handleCostChange = useCallback((groupId: string, cost: number) => {
     setGroups((prev) =>
       prev.map((g) => g.id === groupId ? { ...g, itemCost: cost } : g)
@@ -726,6 +748,7 @@ export default function Home() {
           onCostChange={handleCostChange}
           onRenameSku={renameSku}
           onUndoPosted={undoPosted}
+          onUpdateLivePrice={updateLivePrice}
           onBack={() => setStep("review")}
           onSaveDraft={handleSaveDraft}
           lastSaved={lastSaved}
