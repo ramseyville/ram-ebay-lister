@@ -174,11 +174,13 @@ async function ebayRequest(
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function computeBufferedPrice(raw: number | string | undefined): number {
+// Price is taken exactly as entered in the app's price field — no automatic
+// markup. (Previously this added +18%/$5 on every publish, silently
+// overriding whatever price Mark typed before posting.)
+function resolvePrice(raw: number | string | undefined): number {
   let base = typeof raw === "string" ? parseFloat(raw) : raw ?? 0;
   if (!base || Number.isNaN(base) || base <= 0) base = 29.99;
-  const buffered = Math.max(base * 1.18, base + 5);
-  return Math.round(buffered * 100) / 100;
+  return Math.round(base * 100) / 100;
 }
 
 function normalizeConditionInput(value: string | undefined): string {
@@ -503,6 +505,73 @@ function updateOfferBody(offer: Record<string, unknown>): Record<string, unknown
   return Object.fromEntries(Object.entries(offer).filter(([k]) => !skip.has(k)));
 }
 
+// ── Update price on an already-published listing ──────────────────────────
+//
+// eBay's Seller Hub quick-edit refuses to touch listings created via the
+// Inventory API ("Inventory-based listing management is not currently
+// supported by this tool") and tells the seller to use the tool that
+// created the listing instead. This is that path: look up the offer by
+// SKU, patch just the price, then republish so the live listing reflects it.
+export async function updateOfferPrice(
+  accessToken: string,
+  sku: string,
+  newPrice: number
+): Promise<{ success: boolean; error?: string }> {
+  if (!sku) return { success: false, error: "No SKU provided." };
+  if (!Number.isFinite(newPrice) || newPrice <= 0) {
+    return { success: false, error: "Price must be a positive number." };
+  }
+
+  const lookup = await ebayRequest(
+    accessToken,
+    "GET",
+    `${EBAY_INV_BASE}/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${EBAY_MARKETPLACE_ID}`
+  );
+  if (!lookup.ok) {
+    return { success: false, error: `Could not find eBay offer for SKU ${sku} (${lookup.status}).` };
+  }
+  const offers: any[] = lookup.json?.offers || [];
+  const offer = offers[0];
+  if (!offer?.offerId) {
+    return { success: false, error: `No eBay offer found for SKU ${sku}.` };
+  }
+
+  const body = updateOfferBody({
+    ...offer,
+    pricingSummary: {
+      ...(offer.pricingSummary || {}),
+      price: { value: String(newPrice.toFixed(2)), currency: "USD" },
+    },
+  });
+
+  const upd = await ebayRequest(accessToken, "PUT", `${EBAY_INV_BASE}/offer/${offer.offerId}`, {
+    body,
+    extraHeaders: CL,
+  });
+  if (![200, 201, 204].includes(upd.status)) {
+    return { success: false, error: `eBay rejected the price update (${upd.status}): ${upd.text.slice(0, 200)}` };
+  }
+
+  // If the offer is already published, the update above only changes the
+  // draft offer — re-publish so the live listing's price actually changes.
+  if (offer.status === "PUBLISHED" || offer.listing?.listingId) {
+    const pub = await ebayRequest(
+      accessToken,
+      "POST",
+      `${EBAY_INV_BASE}/offer/${offer.offerId}/publish`,
+      { extraHeaders: CL }
+    );
+    if (!pub.ok) {
+      return {
+        success: false,
+        error: `Price saved but republish failed (${pub.status}): ${pub.text.slice(0, 200)}`,
+      };
+    }
+  }
+
+  return { success: true };
+}
+
 // ── Photo upload to eBay Picture Services (Trading API, XML) ──────────────────
 
 async function uploadPhoto(
@@ -743,7 +812,7 @@ export async function publishListing(
   }
 
   // 3. Offer.
-  const price = computeBufferedPrice(listing.suggested_price);
+  const price = resolvePrice(listing.suggested_price);
   const offerBody: any = {
     sku,
     marketplaceId: EBAY_MARKETPLACE_ID,
