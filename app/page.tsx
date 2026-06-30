@@ -460,6 +460,16 @@ export default function Home() {
     [photoMap]
   );
 
+  const undoPosted = useCallback((groupId: string) => {
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === groupId
+          ? { ...g, postStatus: undefined, listingId: undefined, postError: undefined }
+          : g
+      )
+    );
+  }, []);
+
   const handleCostChange = useCallback((groupId: string, cost: number) => {
     setGroups((prev) =>
       prev.map((g) => g.id === groupId ? { ...g, itemCost: cost } : g)
@@ -715,6 +725,7 @@ export default function Home() {
           onPostAll={postAll}
           onCostChange={handleCostChange}
           onRenameSku={renameSku}
+          onUndoPosted={undoPosted}
           onBack={() => setStep("review")}
           onSaveDraft={handleSaveDraft}
           lastSaved={lastSaved}
