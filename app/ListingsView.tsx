@@ -22,6 +22,7 @@ interface ListingsViewProps {
   onSaveDraft: () => void;
   lastSaved: number | null;
   onCostChange: (groupId: string, cost: number) => void; // Date.now() of last save, or null
+  onRenameSku: (groupId: string, sku: string) => void;
 }
 
 export function ListingsView({
@@ -36,6 +37,7 @@ export function ListingsView({
   onSaveDraft,
   lastSaved,
   onCostChange,
+  onRenameSku,
 }: ListingsViewProps) {
   const done      = groups.filter((g) => g.status === "done").length;
   const writing   = groups.filter((g) => g.status === "writing").length;
@@ -143,6 +145,7 @@ export function ListingsView({
             onRetry={onRetry}
             onPost={onPost}
             onCostChange={onCostChange}
+            onRenameSku={onRenameSku}
           />
         ))}
       </div>
@@ -189,3 +192,4 @@ export function ListingsView({
     </section>
   );
 }
+
