@@ -62,6 +62,7 @@ interface ListingCardProps {
   onPost: (groupId: string) => void;
   onCostChange: (groupId: string, cost: number) => void;
   onRenameSku: (groupId: string, sku: string) => void;
+  onUndoPosted: (groupId: string) => void;
 }
 
 export function ListingCard({
@@ -73,6 +74,7 @@ export function ListingCard({
   onPost,
   onCostChange,
   onRenameSku,
+  onUndoPosted,
 }: ListingCardProps) {
   const [open, setOpen] = useState(true);
   const [editingConditionNotes, setEditingConditionNotes] = useState(false);
@@ -424,6 +426,16 @@ export function ListingCard({
                   </a>
                 </>
               ) : null}
+              {" "}
+              ·{" "}
+              <button
+                type="button"
+                className="btn-link-inline"
+                onClick={() => onUndoPosted(group.id)}
+                title="If this didn't actually go live as its own listing (e.g. it shares a SKU another item already used), clear this status so you can post it again."
+              >
+                Not actually posted? Undo
+              </button>
             </p>
           ) : ebayConnected ? (
             <div className="post-row">
