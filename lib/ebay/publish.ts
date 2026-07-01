@@ -729,6 +729,33 @@ export async function publishListing(
     return { success: false, sku, error: "Could not upload any photos to eBay." };
   }
 
+  // ── SAFETY: refuse to overwrite an existing live eBay listing ────────────
+  // The client-side guard only catches duplicates within the current batch.
+  // This server-side check catches cross-batch collisions (e.g. a SKU used in
+  // a previous session that was already cleared from the app's UI). If the SKU
+  // already has a PUBLISHED offer on eBay, overwriting the inventory item would
+  // silently replace the original listing's photos/title/data and lose it.
+  const existingOfferCheck = await ebayRequest(
+    accessToken,
+    "GET",
+    `${EBAY_INV_BASE}/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${EBAY_MARKETPLACE_ID}`
+  );
+  if (existingOfferCheck.ok) {
+    const existingOffers: any[] = existingOfferCheck.json?.offers || [];
+    const liveOffer = existingOffers.find((o) => o.status === "PUBLISHED");
+    if (liveOffer) {
+      const listingId = liveOffer.listing?.listingId;
+      return {
+        success: false,
+        sku,
+        error:
+          `SKU "${sku}" is already live on eBay` +
+          (listingId ? ` (listing #${listingId})` : "") +
+          `. Choose a different SKU for this item — posting with a duplicate SKU would overwrite and destroy the existing listing.`,
+      };
+    }
+  }
+
   // 2. Inventory item.
   const aspects = buildAspects(listing, catKey);
   // Ask eBay (in parallel) for the leaf category's REQUIRED specifics and its
@@ -968,4 +995,5 @@ async function publishOfferWithRecovery(
     error: `Publish failed (${r.status}): ${r.text.slice(0, 300)}`,
   };
 }
+
 
