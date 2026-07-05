@@ -29,6 +29,7 @@ interface ListingsViewProps {
     sku: string,
     price: number
   ) => Promise<{ success: boolean; error?: string }>;
+  onSetMainPhoto: (groupId: string, photoId: string) => void;
 }
 
 export function ListingsView({
@@ -46,6 +47,7 @@ export function ListingsView({
   onRenameSku,
   onUndoPosted,
   onUpdateLivePrice,
+  onSetMainPhoto,
 }: ListingsViewProps) {
   const done      = groups.filter((g) => g.status === "done").length;
   const writing   = groups.filter((g) => g.status === "writing").length;
@@ -156,6 +158,7 @@ export function ListingsView({
             onRenameSku={onRenameSku}
             onUndoPosted={onUndoPosted}
             onUpdateLivePrice={onUpdateLivePrice}
+            onSetMainPhoto={onSetMainPhoto}
           />
         ))}
       </div>
@@ -202,4 +205,5 @@ export function ListingsView({
     </section>
   );
 }
+
 
