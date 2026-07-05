@@ -761,8 +761,32 @@ export async function publishListing(
   }
 
   // 1. Upload photos → EPS URLs.
+  //    Enhance the main photo (index 0) with Sharp before uploading:
+  //    auto-rotate, trim dead space, place on white square canvas.
+  //    Falls back to the original silently if processing fails.
+  const photoList = [...input.images.slice(0, 12)];
+  if (photoList.length > 0) {
+    try {
+      const enhRes = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/api/enhance-photo`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-app-secret": process.env.APP_SECRET || "" },
+          body: JSON.stringify({ data: photoList[0].data, mediaType: photoList[0].mediaType }),
+        }
+      );
+      if (enhRes.ok) {
+        const enhData = await enhRes.json();
+        if (enhData.success && enhData.data) {
+          photoList[0] = { data: enhData.data, mediaType: enhData.mediaType || "image/jpeg" };
+        }
+      }
+    } catch {
+      // Silent fallback — original photo used if Sharp fails
+    }
+  }
   const photoUrls: string[] = [];
-  for (const img of input.images.slice(0, 12)) {
+  for (const img of photoList) {
     const url = await uploadPhoto(accessToken, img.data, img.mediaType, `${sku}.jpg`);
     if (url) photoUrls.push(url);
   }
@@ -1062,5 +1086,6 @@ async function publishOfferWithRecovery(
     error: `Publish failed (${r.status}): ${r.text.slice(0, 300)}`,
   };
 }
+
 
 
