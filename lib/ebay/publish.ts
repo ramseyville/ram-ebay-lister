@@ -331,12 +331,53 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
 // Match a value against eBay's allowed list, case-insensitively and tolerating
 // singular/plural (so "Unisex Adult" resolves to the valid "Unisex Adults").
 // Returns the canonical allowed value, or null if there's no match.
+// Common size synonyms → canonical eBay value fragments.
+// matchAllowed tries exact/plural first, then expands through these aliases.
+const SIZE_ALIASES: Record<string, string[]> = {
+  "xxs":  ["XXS", "XX-Small", "Extra Extra Small"],
+  "xs":   ["XS", "X-Small", "Extra Small"],
+  "s":    ["S", "Small"],
+  "m":    ["M", "Medium"],
+  "l":    ["L", "Large"],
+  "xl":   ["XL", "X-Large", "Extra Large"],
+  "xxl":  ["XXL", "XX-Large", "2XL", "2X-Large", "Extra Extra Large"],
+  "xxxl": ["XXXL", "3XL", "3X-Large"],
+  "xxxxl":["XXXXL", "4XL", "4X-Large"],
+  "xlt":  ["XLT", "X-Large Tall"],
+  "lt":   ["LT", "Large Tall"],
+  "mt":   ["MT", "Medium Tall"],
+  "st":   ["ST", "Small Tall"],
+  "xxlt": ["XXLT", "2XLT"],
+  // Spelled-out sizes Claude sometimes returns instead of abbreviations
+  "small":         ["S", "Small"],
+  "medium":        ["M", "Medium"],
+  "large":         ["L", "Large"],
+  "extra large":   ["XL", "X-Large", "Extra Large"],
+  "extra small":   ["XS", "X-Small", "Extra Small"],
+  "xx-large":      ["XXL", "2XL"],
+  "x-large":       ["XL", "Extra Large"],
+  "x-small":       ["XS", "Extra Small"],
+};
+
 function matchAllowed(value: string, allowed: string[]): string | null {
   const ls = (value || "").trim().toLowerCase();
   if (!ls) return null;
+  // 1. Exact match (case-insensitive) or simple plural
   for (const v of allowed) {
     const lv = v.toLowerCase();
     if (lv === ls || lv === `${ls}s` || `${lv}s` === ls) return v;
+  }
+  // 2. Size alias expansion — try each synonym against the allowed list
+  const aliases = SIZE_ALIASES[ls] || [];
+  for (const alias of aliases) {
+    const al = alias.toLowerCase();
+    for (const v of allowed) {
+      if (v.toLowerCase() === al) return v;
+    }
+  }
+  // 3. Substring match — e.g. "32W" matches "32W x 30L" if nothing else fits
+  for (const v of allowed) {
+    if (v.toLowerCase().startsWith(ls) || ls.startsWith(v.toLowerCase())) return v;
   }
   return null;
 }
@@ -793,9 +834,35 @@ export async function publishListing(
     };
   }
 
+  // ── Title enforcement ─────────────────────────────────────────────────────
+  // Protocol requires 77-80 characters. If Claude undershot, pad with the most
+  // useful available keywords before the title hits eBay.
+  let ebayTitle = String(listing.title || "Untitled").trim().slice(0, 80);
+  if (ebayTitle.length < 77) {
+    // Candidate padding tokens in priority order — add only if not already in title
+    const padCandidates = [
+      listing.condition === "NEW_WITH_TAGS" || listing.condition === "NEW_NO_TAGS" ? "NWT" : null,
+      listing.size ? String(listing.size).trim() : null,
+      listing.color ? singleValue(listing.color) : null,
+      listing.material ? singleValue(listing.material) : null,
+      listing.item_type ? String(listing.item_type).trim() : null,
+      listing.brand ? String(listing.brand).trim() : null,
+      "Mens",
+      "Shirt",
+    ].filter((t): t is string => Boolean(t) && !ebayTitle.toLowerCase().includes(t.toLowerCase()));
+
+    for (const token of padCandidates) {
+      const candidate = `${ebayTitle} ${token}`;
+      if (candidate.length <= 80) {
+        ebayTitle = candidate;
+        if (ebayTitle.length >= 77) break;
+      }
+    }
+  }
+
   const inventoryItem: any = {
     product: {
-      title: String(listing.title || "Untitled").slice(0, 80),
+      title: ebayTitle,
       description: listing.description || "",
       aspects,
       imageUrls: photoUrls.slice(0, 12),
