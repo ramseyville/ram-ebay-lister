@@ -205,6 +205,17 @@ export default function Home() {
       prev.map((g) => (g.id === groupId ? { ...g, name } : g))
     );
 
+  // Move a photo to position 0 in the group so it becomes the eBay main image.
+  const setMainPhoto = useCallback((groupId: string, photoId: string) => {
+    setGroups((prev) =>
+      prev.map((g) => {
+        if (g.id !== groupId) return g;
+        const rest = g.photoIds.filter((id) => id !== photoId);
+        return { ...g, photoIds: [photoId, ...rest] };
+      })
+    );
+  }, []);
+
   // If the typed SKU collides with another item already in the batch, treat
   // it as a shared label (like a bin prefix) and auto-suffix it — e.g. typing
   // "CLOSET" on three jackets becomes CLOSET-A, CLOSET-B, CLOSET-C instead of
@@ -749,6 +760,7 @@ export default function Home() {
           onRenameSku={renameSku}
           onUndoPosted={undoPosted}
           onUpdateLivePrice={updateLivePrice}
+          onSetMainPhoto={setMainPhoto}
           onBack={() => setStep("review")}
           onSaveDraft={handleSaveDraft}
           lastSaved={lastSaved}
@@ -762,4 +774,5 @@ export default function Home() {
     </main>
   );
 }
+
 
