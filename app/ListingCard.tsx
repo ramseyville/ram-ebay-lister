@@ -68,6 +68,7 @@ interface ListingCardProps {
     sku: string,
     price: number
   ) => Promise<{ success: boolean; error?: string }>;
+  onSetMainPhoto: (groupId: string, photoId: string) => void;
 }
 
 export function ListingCard({
@@ -81,6 +82,7 @@ export function ListingCard({
   onRenameSku,
   onUndoPosted,
   onUpdateLivePrice,
+  onSetMainPhoto,
 }: ListingCardProps) {
   const [open, setOpen] = useState(true);
   const [editingConditionNotes, setEditingConditionNotes] = useState(false);
@@ -149,9 +151,32 @@ export function ListingCard({
   return (
     <article className={`listing-card status-${group.status}`}>
       <header className="listing-card-head" onClick={() => setOpen((o) => !o)}>
-        {cover && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="listing-cover" src={cover.previewUrl} alt="" />
+        {group.photoIds.length > 0 && (
+          <div className="photo-strip" onClick={(e) => e.stopPropagation()}>
+            {group.photoIds.map((photoId, idx) => {
+              const photo = photoById(photoId);
+              if (!photo) return null;
+              return (
+                <div key={photoId} className={`photo-thumb-wrap${idx === 0 ? " is-main" : ""}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo.previewUrl} alt="" />
+                  {idx !== 0 && group.postStatus !== "posted" && (
+                    <button
+                      type="button"
+                      className="set-main-btn"
+                      title="Set as main photo"
+                      onClick={() => onSetMainPhoto(group.id, photoId)}
+                    >
+                      ★
+                    </button>
+                  )}
+                  {idx === 0 && (
+                    <span className="main-badge" title="Main photo (shown first on eBay)">★</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
         <div className="listing-card-title">
           <strong>
@@ -532,5 +557,6 @@ export function ListingCard({
     </article>
   );
 }
+
 
 
