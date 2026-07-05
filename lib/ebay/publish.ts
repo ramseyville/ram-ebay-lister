@@ -849,7 +849,7 @@ export async function publishListing(
       listing.brand ? String(listing.brand).trim() : null,
       "Mens",
       "Shirt",
-    ].filter((t): t is string => Boolean(t) && !ebayTitle.toLowerCase().includes(t.toLowerCase()));
+    ].filter((t): t is string => t !== null && t !== undefined && !ebayTitle.toLowerCase().includes(t.toLowerCase()));
 
     for (const token of padCandidates) {
       const candidate = `${ebayTitle} ${token}`;
