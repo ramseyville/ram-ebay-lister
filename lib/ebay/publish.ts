@@ -122,6 +122,42 @@ const PANTS_CATEGORIES = new Set([
   "womens_pants", "womens_jeans", "womens_skirt", "mens_pants", "mens_jeans",
 ]);
 
+const OUTERWEAR_CATEGORIES = new Set([
+  "mens_coat", "mens_jacket", "womens_coat", "womens_jacket",
+]);
+
+const TOPS_CATEGORIES = new Set([
+  "mens_top", "womens_top", "mens_sweater", "womens_sweater", "mens_clothing", "womens_clothing",
+]);
+
+// Aspects that should ONLY be populated as defaults when the item is in a
+// relevant category. Prevents "Hood: No Hood" on dress shirts, "Rise: Mid Rise"
+// on jackets, "Leg Style: Straight" on tops, etc.
+// Map of aspect name → set of category keys where the default is appropriate.
+const ASPECT_CATEGORY_GATES: Record<string, Set<string>> = {
+  "Hood":         OUTERWEAR_CATEGORIES,
+  "Lining":       OUTERWEAR_CATEGORIES,
+  "Rise":         PANTS_CATEGORIES,
+  "Leg Style":    PANTS_CATEGORIES,
+  "Inseam":       PANTS_CATEGORIES,
+  "Waist Size":   PANTS_CATEGORIES,
+  "Front Type":   PANTS_CATEGORIES,
+  "Leg Opening":  PANTS_CATEGORIES,
+  "Closure":      new Set([...PANTS_CATEGORIES, ...OUTERWEAR_CATEGORIES]),
+  "Neckline":     TOPS_CATEGORIES,
+  "Sleeve Length": TOPS_CATEGORIES,
+  "Skirt Length": new Set(["womens_skirt"]),
+  "Dress Length": new Set(["womens_dress"]),
+  "Heel Height":  new Set(["mens_shoes", "womens_shoes"]),
+  "Toe Shape":    new Set(["mens_shoes", "womens_shoes"]),
+  "Shoe Width":   new Set(["mens_shoes", "womens_shoes"]),
+  "Hat Style":    new Set(["hat"]),
+  "Brim Style":   new Set(["hat"]),
+  "Bag Closure":  new Set(["handbag", "wallet"]),
+  "Strap Type":   new Set(["handbag"]),
+  "Adjustable":   new Set(["handbag", "belt", "hat"]),
+};
+
 const ASPECT_DEFAULTS: Record<string, string> = {
   "Skirt Length": "Knee-Length", "Dress Length": "Knee-Length", Rise: "Mid Rise",
   "Leg Style": "Straight", Closure: "Pull-On", "Shoe Width": "Medium",
@@ -442,6 +478,24 @@ function reconcileAspects(
     const current = aspects[a.name]?.[0];
     const mustFill = a.required || (isPants && ALWAYS_FILL_FOR_PANTS.has(a.name));
 
+    // Category gate: if this aspect has a gate and the current category isn't
+    // in the allowed set, drop any value the model may have placed there and
+    // skip filling a default. Prevents "Hood: No Hood" on dress shirts, etc.
+    const gate = ASPECT_CATEGORY_GATES[a.name];
+    if (gate && !gate.has(catKey)) {
+      // Only drop if the value looks like a default guess, not something the
+      // model read directly from the item (e.g. a hoodie correctly flagged
+      // even though its leaf category is "mens_top"). Heuristic: drop if the
+      // value exactly matches the known default, keep otherwise.
+      const isDefaultValue = ASPECT_DEFAULTS[a.name] &&
+        (current || "").toLowerCase() === ASPECT_DEFAULTS[a.name].toLowerCase();
+      if (isDefaultValue || !current) {
+        delete aspects[a.name];
+        continue;
+      }
+      // Model set a non-default value — trust it (e.g. a hoodie top with Hood: Yes).
+    }
+
     // Force Handmade/Personalize to "No" regardless of what the model put there.
     if (FORCE_NO_ASPECTS.has(a.name)) {
       const noValue = matchAllowed("No", a.values) || (a.mode === "SELECTION_ONLY" ? a.values[0] : "No");
@@ -462,28 +516,25 @@ function reconcileAspects(
           aspects[a.name] = unique;
           continue;
         }
-        // None of the model's guesses were real eBay values — fall through
-        // to the single-value resolution below (default/required handling).
       }
 
       // Must be one of eBay's allowed values, or the publish 25002-fails /
       // a nonsense free-text value gets forced into a dropdown.
+      const useDefault = !gate || gate.has(catKey); // only apply default if not gated out
       const canonical =
         matchAllowed(current || "", a.values) ||
-        matchAllowed(ASPECT_DEFAULTS[a.name] || "", a.values) ||
+        (useDefault ? matchAllowed(ASPECT_DEFAULTS[a.name] || "", a.values) : "") ||
         (a.name === "Department" ? pickDepartment(a.values, listing, catKey) : "") ||
         (mustFill ? a.values[0] : "") ||
         "";
       if (canonical) {
         aspects[a.name] = [canonical];
       } else if (!mustFill && current) {
-        // No match found and not required — drop the bogus value rather than
-        // publish junk into a dropdown-only field.
         delete aspects[a.name];
       }
     } else if (mustFill && !current) {
-      // FREE_TEXT and unset — fill from the listing or a sensible default.
-      const v = freeTextDefault(a.name, listing) || ASPECT_DEFAULTS[a.name] || a.values[0] || "";
+      const useDefault = !gate || gate.has(catKey);
+      const v = freeTextDefault(a.name, listing) || (useDefault ? ASPECT_DEFAULTS[a.name] : "") || a.values[0] || "";
       const clipped = clipAspectValue(v);
       if (clipped) aspects[a.name] = [clipped];
     }
