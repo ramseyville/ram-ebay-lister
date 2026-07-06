@@ -23,6 +23,7 @@ export function buildBatchPricingUrl(groups: ItemGroup[]): string {
   const ready = groups.filter((g) => g.status === "done" && g.listing);
   if (ready.length === 0) return "";
   const itemBlocks = ready.map((g, i) => `--- Item ${i + 1} of ${ready.length} ---\n${itemBrief(g)}`).join("\n\n");
-  const prompt = `Please run a full eBay pricing analysis for this batch of ${ready.length} items.\n\n)]MES:\n\n${itemBlocks}`;
+  const prompt = `Please run a full eBay pricing analysis for this batch of ${ready.length} items.\n\nITEMS:\n\n${itemBlocks}`;
   return `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
 }
+
