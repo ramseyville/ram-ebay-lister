@@ -10,8 +10,8 @@ import {
 import { toImageBlock, type ImageBlock } from "@/lib/images";
 import type { AnalyzeRequestBody, ListingResult } from "@/lib/types";
 
-// Analysis can take 20-40s for a multi-photo item. Give it room.
-export const maxDuration = 60;
+// Analysis can take 30-90s with the expanded prompt + web searches. Pro plan supports 300s.
+export const maxDuration = 300;
 
 const ANALYSIS_MODEL = "claude-opus-4-8";
 const ROUTER_MODEL = "claude-sonnet-4-6";
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       try {
         const resp = await client.messages.create({
           model: ANALYSIS_MODEL,
-          max_tokens: 3000,
+          max_tokens: 4000,
           // Lets the model look up the brand's official size chart for
           // measurements instead of estimating from photos. The prompt
           // requires trying multiple query angles (brand site, retailer
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
             {
               type: "web_search_20250305",
               name: "web_search",
-              max_uses: 6,
+              max_uses: 4,
             },
           ],
           // System prompt is large and identical across requests for the same
@@ -181,3 +181,4 @@ export async function POST(req: NextRequest) {
     return safeErrorResponse("analyze", e, "Something went wrong analyzing photos — please try again.");
   }
 }
+
