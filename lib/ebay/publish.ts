@@ -814,27 +814,12 @@ export async function publishListing(
   // 1. Upload photos → EPS URLs.
   //    Enhance the main photo (index 0) with Sharp before uploading:
   //    auto-rotate, trim dead space, place on white square canvas.
-  //    Falls back to the original silently if processing fails.
+  //    Runs in-process (not via HTTP) so it works correctly in serverless.
   const photoList = [...input.images.slice(0, 12)];
   if (photoList.length > 0) {
-    try {
-      const enhRes = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/api/enhance-photo`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-app-secret": process.env.APP_SECRET || "" },
-          body: JSON.stringify({ data: photoList[0].data, mediaType: photoList[0].mediaType }),
-        }
-      );
-      if (enhRes.ok) {
-        const enhData = await enhRes.json();
-        if (enhData.success && enhData.data) {
-          photoList[0] = { data: enhData.data, mediaType: enhData.mediaType || "image/jpeg" };
-        }
-      }
-    } catch {
-      // Silent fallback — original photo used if Sharp fails
-    }
+    const { enhanceMainPhoto } = await import("@/lib/enhance");
+    const enhanced = await enhanceMainPhoto(photoList[0].data, photoList[0].mediaType);
+    photoList[0] = enhanced;
   }
   const photoUrls: string[] = [];
   for (const img of photoList) {
@@ -982,6 +967,26 @@ export async function publishListing(
 
   // 3. Offer.
   const price = resolvePrice(listing.suggested_price);
+
+  // Apply a 3% promoted listing rate for high-competition brands and clothing
+  // categories where many similar items compete (Polo shorts, Tommy Bahama
+  // shirts, etc.). Promoted listings boost visibility in eBay search above
+  // organic rank for a small percentage of the final sale price.
+  const PROMOTED_BRANDS = new Set([
+    "polo ralph lauren", "tommy bahama", "peter millar", "faherty", "hugo boss",
+    "psycho bunny", "lacoste", "rhone", "johnnie-o", "southern tide",
+    "travis mathew", "travismathew", "brooks brothers", "burberry", "zegna",
+    "armani", "lacoste", "vineyard vines", "patagonia", "orvis", "pendleton",
+    "columbia", "the north face", "under armour", "nike", "adidas",
+  ]);
+  const PROMOTED_CATEGORIES = new Set([
+    "mens_top", "mens_pants", "mens_shorts", "mens_jacket", "mens_coat",
+    "mens_sweater", "mens_jeans", "womens_top", "womens_pants", "womens_jacket",
+  ]);
+  const brandLower = String(listing.brand || "").toLowerCase().trim();
+  const isPromoted =
+    PROMOTED_BRANDS.has(brandLower) || PROMOTED_CATEGORIES.has(catKey);
+
   const offerBody: any = {
     sku,
     marketplaceId: EBAY_MARKETPLACE_ID,
@@ -995,6 +1000,14 @@ export async function publishListing(
       fulfillmentPolicyId: setup.fulfillmentPolicyId,
       paymentPolicyId: setup.paymentPolicyId,
       returnPolicyId: setup.returnPolicyId,
+      ...(isPromoted
+        ? {
+            promotedListingPolicy: {
+              bidPercentage: "3.0",
+              campaignId: undefined, // eBay auto-assigns to default campaign
+            },
+          }
+        : {}),
     },
     includeCatalogProductDetails: false,
     // Custom label = SKU so it appears and is editable in Seller Hub
@@ -1137,6 +1150,7 @@ async function publishOfferWithRecovery(
     error: `Publish failed (${r.status}): ${r.text.slice(0, 300)}`,
   };
 }
+
 
 
 
