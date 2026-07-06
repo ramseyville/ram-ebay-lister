@@ -94,7 +94,7 @@ Study each photo carefully:
   - COLLAR STYLE: Examine the neckline closely. Button-Down | Polo | Spread | Point | Mandarin/Banded | Lapel | Shawl | No Collar | Crew Neck | V-Neck | Turtleneck | Mock Neck | Henley
   - CLOSURE: Look at the front opening. Button | Full Zip | Half Zip | Pullover | Snap | Hook & Eye | No Closure
   - CUFF STYLE (long-sleeve only): Examine the wrist area. Barrel | French/Double | Ribbed | Elastic | Snap | No Cuff
-  - FRONT STYLE (pants/trousers only): Look at the front of the pants. Flat Front | Pleated
+  - FRONT TYPE (pants/trousers/chinos/jeans only): Look at the front of the pants. Flat Front | Pleated
   - POCKET STYLE: Observe the pockets. No Pockets | Welt | Patch | Slash | Cargo | Zip | On Seam
   - HOOD: Is there a hood? Yes - Fixed | Yes - Removable | No Hood
   - FIT: Judge from the overall silhouette. Regular | Slim | Relaxed | Athletic Fit | Classic Fit | Modern Fit | Oversized
@@ -112,15 +112,25 @@ MEASUREMENTS — non-negotiable: do NOT estimate or invent measurements from the
 
 PRICING — non-negotiable: you do not have access to live eBay sold-comp data, so you must NOT invent a price. Set "suggested_price" to the literal string "PRICE — fill in from sold eBay comps" in every case, with no exceptions, regardless of how confident you are about value.
 
-DESCRIPTION STRUCTURE — the "description" field must be an HTML block (valid HTML, no markdown) formatted for eBay listings, containing these parts in this exact order:
-1. The exact title text as <h2>title here</h2>
-2. Opening hook + style description as a <p> paragraph in professional, brand-appropriate language
-3. Measurements as a <ul> bulleted list — the real looked-up numbers, not a placeholder. Each measurement on its own <li>
-4. Fabric / material composition as a <p> paragraph
-5. Condition statement as a <p> paragraph — honest, specific, flaws called out plainly
-6. SEO paragraph as a <p> — naturally woven sentence(s) containing 15+ relevant search keywords (brand, style, size, color, fit, era, material, etc.), never a bare keyword list
-7. Closing sign-off as <p><em>Find more quality men's clothing, outdoor gear, and collectibles at Courthouse Square Deals on eBay. Ships fast from Texas.</em></p>
-Use only basic HTML tags: <h2>, <p>, <ul>, <li>, <em>, <strong>. No CSS, no divs, no classes. Do not include <html>, <head>, or <body> tags — just the content tags.
+DESCRIPTION STRUCTURE — the "description" field must be an HTML block (valid HTML, no markdown) formatted for eBay listings, containing these sections in this exact order. No section label headers visible in the output — buyers see the text, not the structure labels.
+
+1. Title as <h2>exact title text here</h2>
+
+2. Opening sentence — CRITICAL for Cassini/AEO ranking. Must be approximately 160 characters of dense keyword loading. Front-load brand name, gender, item type, size, color, and condition in the very first sentence. Do not write a soft opener. Load the most searchable terms first. Example: "Peter Millar Men's Large Navy Blue Performance Quarter-Zip Pullover Sweater — NWT, retail $145, lightweight stretch fabric ideal for golf and travel."
+
+3. Body description as <p> — professional, brand-modeled language. Describe fabric feel, fit, drape, and style. Where appropriate, weave in one of these: urgency/scarcity signal ("This size is moving fast"), buyer persona line ("Built for the golfer or business traveler who demands performance without sacrificing style"), or demand indicator ("Highly sought after in the current resale market"). Close the paragraph with: "Questions welcome before purchasing."
+
+4. Measurements as <ul> bulleted list — real numbers from the brand's official size chart, one per <li>. Shirts: Chest (pit to pit), Length (shoulder to hem), Sleeve length. Pants: Waist (flat), Inseam, Rise, Leg Opening, Outseam. Never write "see photos" or leave this as a placeholder.
+
+5. Fabric/material as <p> — sourced from tag or brand website. If truly unavailable after searching, omit this section entirely. Never write "fabric content unavailable" or tell the buyer to check the tag.
+
+6. Condition as <p> — honest and specific. For pre-owned: use precise language like "light pilling on cuffs," "no fading," "colors vibrant," "seams tight," "all buttons present and secure," "no pulls," "no stains detected." Do not be generic. State any flaw plainly. For NWT items, state retail price if known.
+
+7. SEO paragraph as <p> — 2-3 naturally written sentences containing 15+ relevant search keywords (brand, style, size, color, fit, material, occasion, season, gender, condition, use case). Never use a bare keyword list or tag cloud. Never label this section — it reads as natural prose. Do NOT write "SEO Paragraph:" or any heading before it.
+
+8. Sign-off as <p><em>Find more quality men's clothing, outdoor gear, and collectibles at Courthouse Square Deals on eBay. Ships fast from Texas.</em></p>
+
+HTML rules: Use only <h2>, <p>, <ul>, <li>, <em>, <strong>. No CSS, no divs, no classes. No <html>, <head>, or <body> tags. No emojis. No protocol notes or internal labels visible in output.
 
 Return ONLY valid JSON — no markdown, no code fences, no explanation. Use this exact structure:
 {
@@ -228,7 +238,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation. Use this
     "Jewelry Length": "Length in inches if visible — leave blank if N/A",
     "Ring Size": "Exact ring size if shown — leave blank if N/A",
     "Signed": "Yes if a maker mark or signature is visible, No if clearly unsigned, blank if unknown",
-    "Vintage": "Yes or No — leave blank if unknown",
+    "Vintage": "Yes or No — REQUIRED for all clothing. Never leave blank. If the item is clearly modern (current brand, contemporary styling), use No. Use Yes only for items that are genuinely vintage (typically 20+ years old with period styling).",
     "Antique": "Yes or No — leave blank if unknown",
     "Handmade": "Yes or No — leave blank if unknown"
   }
@@ -262,7 +272,7 @@ Hat Style: "Baseball Cap" | "Beanie" | "Bucket Hat" | "Fedora" | "Snapback" | "T
 Vintage: "Yes" | "No" (never blank — always include for clothing)
 For category/category_hint: The broad category can be approximate, but the category_hint should help eBay find the exact leaf category for whatever type of item this is.
 For all item types: include as many accurate specifics as the photos support, even for non-clothing items such as collectibles, media, home decor, toys, tools, sporting goods, art, kitchenware, and electronics accessories.
-Before returning the JSON, silently re-check: (1) is title length exactly 77-80 characters, (2) does condition honor the NWT gating rule and does the title include "NWT" if condition is NEW_WITH_TAGS, (3) does the title contain any style number, model number, or alphanumeric manufacturer code — if so, remove it and replace with searchable keywords, (4) is suggested_price the literal placeholder string, (5) does description start with the title as its own first line, followed by the rest of the 7-part structure ending in the exact sign-off line, (6) are the measurements real looked-up numbers rather than "NEEDS VERIFICATION" — only allow that fallback if multiple genuine searches truly failed. Fix anything that fails before responding.`;
+Before returning the JSON, silently re-check: (1) title is exactly 77-80 characters and follows the locked formula (Brand + Gender + Material + Item Type + Color + Size + SEO phrase + NWT if applicable), (2) title contains no style numbers, no "Pre-Owned," no "Used," and no marketing adjectives, (3) condition honors the NWT gating rule and title includes "NWT" if condition is NEW_WITH_TAGS, (4) suggested_price is the exact literal placeholder string, (5) description opens with the <h2> title then an ~160-character keyword-dense opening sentence, contains all 8 sections in order, has no section label headers visible to buyers (no "SEO Paragraph:" heading), and ends with the exact sign-off line, (6) measurements are real looked-up numbers from the brand size chart — only "NEEDS VERIFICATION" if multiple genuine searches failed, (7) Vintage is declared (Yes or No) for all clothing items, (8) Hood, Lining, Rise, Leg Style, and Inseam are blank for any item where they are not applicable (no "Hood: No Hood" on a dress shirt). Fix anything that fails before responding.`;
 
 export function buildProfiledAnalysisPrompt(profile: string): string {
   const normalized = normalizeItemProfile(profile);
