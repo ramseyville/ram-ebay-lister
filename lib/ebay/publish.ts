@@ -812,15 +812,7 @@ export async function publishListing(
   }
 
   // 1. Upload photos → EPS URLs.
-  //    Enhance the main photo (index 0) with Sharp before uploading:
-  //    auto-rotate, trim dead space, place on white square canvas.
-  //    Runs in-process (not via HTTP) so it works correctly in serverless.
   const photoList = [...input.images.slice(0, 12)];
-  if (photoList.length > 0) {
-    const { enhanceMainPhoto } = await import("@/lib/enhance");
-    const enhanced = await enhanceMainPhoto(photoList[0].data, photoList[0].mediaType);
-    photoList[0] = enhanced;
-  }
   const photoUrls: string[] = [];
   for (const img of photoList) {
     const url = await uploadPhoto(accessToken, img.data, img.mediaType, `${sku}.jpg`);
@@ -1150,6 +1142,7 @@ async function publishOfferWithRecovery(
     error: `Publish failed (${r.status}): ${r.text.slice(0, 300)}`,
   };
 }
+
 
 
 
