@@ -162,7 +162,14 @@ export async function POST(req: NextRequest) {
         });
         const listing = parseModelJson<ListingResult>(lastText(resp));
         listing.item_profile = profile;
-        return NextResponse.json({ ok: true, listing });
+        // Return token usage so the client can track cost per listing.
+        const usage = {
+          input_tokens: resp.usage?.input_tokens ?? 0,
+          output_tokens: resp.usage?.output_tokens ?? 0,
+          cache_read_input_tokens: (resp.usage as any)?.cache_read_input_tokens ?? 0,
+          cache_creation_input_tokens: (resp.usage as any)?.cache_creation_input_tokens ?? 0,
+        };
+        return NextResponse.json({ ok: true, listing, usage });
       } catch (err) {
         const fatal = anthropicAuthError(err);
         if (fatal) throw fatal; // auth/billing won't fix itself on retry
@@ -181,4 +188,5 @@ export async function POST(req: NextRequest) {
     return safeErrorResponse("analyze", e, "Something went wrong analyzing photos — please try again.");
   }
 }
+
 
