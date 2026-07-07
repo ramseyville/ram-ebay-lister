@@ -77,6 +77,8 @@ export default function Home() {
   const [ebayConnected, setEbayConnected] = useState(false);
   const [lastSaved, setLastSaved] = useState<number | null>(null);
   const [draftMeta, setDraftMeta] = useState<ReturnType<typeof hasDraft>>(null);
+  // Session cost tracker — Opus 4.8: $15/M input, $75/M output, $1.50/M cache read
+  const [sessionCost, setSessionCost] = useState({ inputTokens: 0, outputTokens: 0, cacheTokens: 0, listings: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
 
   const photoMap = useMemo(() => {
@@ -352,6 +354,16 @@ export default function Home() {
               : g
           )
         );
+
+        // Accumulate session cost from token usage
+        if (data.usage) {
+          setSessionCost((prev) => ({
+            inputTokens: prev.inputTokens + (data.usage!.input_tokens ?? 0),
+            outputTokens: prev.outputTokens + (data.usage!.output_tokens ?? 0),
+            cacheTokens: prev.cacheTokens + (data.usage!.cache_read_input_tokens ?? 0),
+            listings: prev.listings + 1,
+          }));
+        }
       } catch (e) {
         setGroups((prev) =>
           prev.map((g) =>
@@ -771,8 +783,25 @@ export default function Home() {
         Your photos are sent securely to sort and write listings, and are not
         stored. One-click posting to eBay is coming in the next phase.
       </p>
+
+      {sessionCost.listings > 0 && (() => {
+        // Opus 4.8 pricing: $15/M input, $75/M output, $1.50/M cache read
+        const inputCost  = (sessionCost.inputTokens  / 1_000_000) * 15;
+        const outputCost = (sessionCost.outputTokens / 1_000_000) * 75;
+        const cacheCost  = (sessionCost.cacheTokens  / 1_000_000) * 1.5;
+        const total      = inputCost + outputCost + cacheCost;
+        const perListing = total / sessionCost.listings;
+        return (
+          <p className="footnote session-cost">
+            💡 Session: <strong>{sessionCost.listings} listing{sessionCost.listings !== 1 ? "s" : ""}</strong> analyzed
+            · AI cost <strong>${total.toFixed(3)}</strong> total
+            · <strong>${perListing.toFixed(3)}</strong> per listing
+          </p>
+        );
+      })()}
     </main>
   );
 }
+
 
 
