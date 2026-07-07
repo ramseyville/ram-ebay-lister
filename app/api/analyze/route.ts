@@ -185,8 +185,11 @@ export async function POST(req: NextRequest) {
       console.error("[analyze] auth/billing failure:", e.message);
       return NextResponse.json({ ok: false, error: e.message }, { status: e.status });
     }
-    return safeErrorResponse("analyze", e, "Something went wrong analyzing photos — please try again.");
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[analyze] error:", msg);
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
+
 
 
