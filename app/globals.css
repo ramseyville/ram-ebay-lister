@@ -570,6 +570,16 @@ textarea {
   margin-top: 3rem;
 }
 
+.session-cost {
+  margin-top: 0.5rem;
+  color: var(--color-ink-faint);
+  font-size: 0.78rem;
+}
+
+.session-cost strong {
+  color: var(--color-ink);
+}
+
 .section-label {
   font-size: 0.78rem;
   font-weight: 600;
@@ -1119,5 +1129,6 @@ textarea {
   outline: 2px solid var(--color-accent, #2563eb);
   outline-offset: 1px;
 }
+
 
 
