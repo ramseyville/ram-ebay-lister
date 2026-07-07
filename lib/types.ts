@@ -37,10 +37,18 @@ export interface AnalyzeRequestBody {
   profile: string;
 }
 
+export interface TokenUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+}
+
 export interface AnalyzeResponse {
   ok: boolean;
   listing?: ListingResult;
   error?: string;
+  usage?: TokenUsage;
 }
 
 export interface SortResponse {
@@ -77,3 +85,4 @@ export interface ItemGroup {
   postError?: string;
   itemCost?: number; // seller cost basis in dollars, default 10
 }
+
