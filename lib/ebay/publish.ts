@@ -895,15 +895,32 @@ export async function publishListing(
 
   // Normalize item_type pluralization — "Short" → "Shorts", "Pant" → "Pants" etc.
   // eBay buyers search plural forms; singular misses those queries entirely.
-  const normalizeItemType = (t: string): string =>
-    t.replace(/\bShort\b(?!s)/g, "Shorts")
-     .replace(/\bPant\b(?!s)/g, "Pants")
-     .replace(/\bJean\b(?!s)/g, "Jeans")
-     .replace(/\bSock\b(?!s)/g, "Socks")
-     .replace(/\bShoe\b(?!s)/g, "Shoes")
-     .replace(/\bGlove\b(?!s)/g, "Gloves");
+  // Normalize title tokens for maximum Cassini search coverage:
+  // - Remove apostrophes from gendered possessives (Men's → Mens, Women's → Womens)
+  //   Buyers rarely type apostrophes on mobile; "Mens" has higher search volume.
+  // - Pluralize item types (Short → Shorts, Pant → Pants, etc.)
+  const normalizeTitle = (t: string): string =>
+    t
+      // Gender normalization — apostrophe removal
+      .replace(/Men's/gi, "Mens")
+      .replace(/Women's/gi, "Womens")
+      .replace(/Kid's/gi, "Kids")
+      .replace(/Boy's/gi, "Boys")
+      .replace(/Girl's/gi, "Girls")
+      // Standalone "Men" → "Mens", "Women" → "Womens" (stronger gender signal)
+      .replace(/Men(?!s)/g, "Mens")
+      .replace(/Women(?!s)/g, "Womens")
+      // Item type pluralization
+      .replace(/Short(?!s)/g, "Shorts")
+      .replace(/Pant(?!s)/g, "Pants")
+      .replace(/Jean(?!s)/g, "Jeans")
+      .replace(/Sock(?!s)/g, "Socks")
+      .replace(/Shoe(?!s)/g, "Shoes")
+      .replace(/Glove(?!s)/g, "Gloves");
 
-  let ebayTitle = normalizeItemType(String(listing.title || "Untitled").trim()).slice(0, 80);
+  const normalizeItemType = (t: string): string => normalizeTitle(t);
+
+  let ebayTitle = normalizeTitle(String(listing.title || "Untitled").trim()).slice(0, 80);
   if (ebayTitle.length < 77) {
     // Candidate padding tokens — item-specific only, in priority order.
     // Each token is only added if it isn't already present in the title.
