@@ -921,6 +921,13 @@ export async function publishListing(
   const normalizeItemType = (t: string): string => normalizeTitle(t);
 
   let ebayTitle = normalizeTitle(String(listing.title || "Untitled").trim()).slice(0, 80);
+
+  // Strip any retail price under $90 from the title — low prices waste keyword
+  // space and signal low value. Only $90+ retail prices are worth the characters.
+  ebayTitle = ebayTitle.replace(/\s*\$(\d+(?:\.\d{2})?)\s*(?:retail|msrp|NWT)?/gi, (match, amount) => {
+    const price = parseFloat(amount);
+    return price >= 90 ? match : "";
+  }).replace(/\s{2,}/g, " ").trim().slice(0, 80);
   if (ebayTitle.length < 77) {
     // Candidate padding tokens — item-specific only, in priority order.
     // Each token is only added if it isn't already present in the title.
