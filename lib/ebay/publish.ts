@@ -889,18 +889,32 @@ export async function publishListing(
   // ── Title enforcement ─────────────────────────────────────────────────────
   // Protocol requires 77-80 characters. If Claude undershot, pad with the most
   // useful available keywords before the title hits eBay.
-  let ebayTitle = String(listing.title || "Untitled").trim().slice(0, 80);
+  // NEVER append generic fallbacks like "Shirt" or "Mens" — they produce
+  // nonsense titles (e.g. "AG Wanderer Shorts ... Mens Shirt").
+  // Only pad with data that is actually known about this specific item.
+
+  // Normalize item_type pluralization — "Short" → "Shorts", "Pant" → "Pants" etc.
+  // eBay buyers search plural forms; singular misses those queries entirely.
+  const normalizeItemType = (t: string): string =>
+    t.replace(/\bShort\b(?!s)/g, "Shorts")
+     .replace(/\bPant\b(?!s)/g, "Pants")
+     .replace(/\bJean\b(?!s)/g, "Jeans")
+     .replace(/\bSock\b(?!s)/g, "Socks")
+     .replace(/\bShoe\b(?!s)/g, "Shoes")
+     .replace(/\bGlove\b(?!s)/g, "Gloves");
+
+  let ebayTitle = normalizeItemType(String(listing.title || "Untitled").trim()).slice(0, 80);
   if (ebayTitle.length < 77) {
-    // Candidate padding tokens in priority order — add only if not already in title
+    // Candidate padding tokens — item-specific only, in priority order.
+    // Each token is only added if it isn't already present in the title.
+    const itemType = listing.item_type ? normalizeItemType(String(listing.item_type).trim()) : null;
     const padCandidates = [
       listing.condition === "NEW_WITH_TAGS" || listing.condition === "NEW_NO_TAGS" ? "NWT" : null,
       listing.size ? String(listing.size).trim() : null,
       listing.color ? singleValue(listing.color) : null,
       listing.material ? singleValue(listing.material) : null,
-      listing.item_type ? String(listing.item_type).trim() : null,
+      itemType,
       listing.brand ? String(listing.brand).trim() : null,
-      "Mens",
-      "Shirt",
     ].filter((t): t is string => t !== null && t !== undefined && !ebayTitle.toLowerCase().includes(t.toLowerCase()));
 
     for (const token of padCandidates) {
@@ -1142,6 +1156,7 @@ async function publishOfferWithRecovery(
     error: `Publish failed (${r.status}): ${r.text.slice(0, 300)}`,
   };
 }
+
 
 
 
