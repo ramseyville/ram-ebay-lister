@@ -948,7 +948,44 @@ export async function publishListing(
         if (ebayTitle.length >= 77) break;
       }
     }
-  }
+
+    // Second pass — if still short, add category-appropriate descriptor phrases.
+    // These are meaningful search terms, not generic filler.
+    if (ebayTitle.length < 77) {
+      const cat = (catKey || "").toLowerCase();
+      const isPants  = cat.includes("pant") || cat.includes("jean") || cat.includes("trouser");
+      const isShorts = cat.includes("short");
+      const isTop    = cat.includes("top") || cat.includes("shirt") || cat.includes("sweater");
+      const isJacket = cat.includes("jacket") || cat.includes("coat");
+      const isShoes  = cat.includes("shoe") || cat.includes("boot");
+
+      const phrases = [
+        isPants  ? "Dress Pants" : null,
+        isShorts ? "Casual Shorts" : null,
+        isTop    ? "Button Down" : null,
+        isJacket ? "Outerwear" : null,
+        isShoes  ? "Leather" : null,
+        // Universal — add gender + condition if space allows
+        listing.condition === "NEW_WITH_TAGS" ? "NWT New" : null,
+        listing.condition === "EXCELLENT" ? "Excellent Condition" : null,
+        listing.condition === "VERY_GOOD" ? "Very Good Condition" : null,
+        // Season/occasion fillers that add genuine search value
+        "Casual",
+        "Classic",
+      ].filter((t): t is string =>
+        t !== null &&
+        t !== undefined &&
+        !ebayTitle.toLowerCase().includes(t.toLowerCase())
+      );
+
+      for (const phrase of phrases) {
+        const candidate = `${ebayTitle} ${phrase}`;
+        if (candidate.length <= 80) {
+          ebayTitle = candidate;
+          if (ebayTitle.length >= 77) break;
+        }
+      }
+    }
 
   const inventoryItem: any = {
     product: {
