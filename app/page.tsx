@@ -77,7 +77,7 @@ export default function Home() {
   const [ebayConnected, setEbayConnected] = useState(false);
   const [lastSaved, setLastSaved] = useState<number | null>(null);
   const [draftMeta, setDraftMeta] = useState<ReturnType<typeof hasDraft>>(null);
-  // Session cost tracker — Opus 4.8: $15/M input, $75/M output, $1.50/M cache read
+  // Session cost tracker — Sonnet 4.6: $3/M input, $15/M output, $0.30/M cache read
   const [sessionCost, setSessionCost] = useState({ inputTokens: 0, outputTokens: 0, cacheTokens: 0, listings: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -785,10 +785,10 @@ export default function Home() {
       </p>
 
       {sessionCost.listings > 0 && (() => {
-        // Opus 4.8 pricing: $15/M input, $75/M output, $1.50/M cache read
-        const inputCost  = (sessionCost.inputTokens  / 1_000_000) * 15;
-        const outputCost = (sessionCost.outputTokens / 1_000_000) * 75;
-        const cacheCost  = (sessionCost.cacheTokens  / 1_000_000) * 1.5;
+        // Sonnet 4.6 pricing: $3/M input, $15/M output, $0.30/M cache read
+        const inputCost  = (sessionCost.inputTokens  / 1_000_000) * 3;
+        const outputCost = (sessionCost.outputTokens / 1_000_000) * 15;
+        const cacheCost  = (sessionCost.cacheTokens  / 1_000_000) * 0.30;
         const total      = inputCost + outputCost + cacheCost;
         const perListing = total / sessionCost.listings;
         return (
