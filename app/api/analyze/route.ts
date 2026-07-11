@@ -13,7 +13,7 @@ import type { AnalyzeRequestBody, ListingResult } from "@/lib/types";
 // Analysis can take 30-90s with the expanded prompt + web searches. Pro plan supports 300s.
 export const maxDuration = 300;
 
-const ANALYSIS_MODEL = "claude-opus-4-8";
+const ANALYSIS_MODEL = "claude-sonnet-4-6";
 const ROUTER_MODEL = "claude-sonnet-4-6";
 const MAX_IMAGES = 12;
 
