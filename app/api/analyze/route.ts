@@ -15,7 +15,7 @@ export const maxDuration = 300;
 
 const ANALYSIS_MODEL = "claude-sonnet-4-6";
 const ROUTER_MODEL = "claude-sonnet-4-6";
-const MAX_IMAGES = 12;
+const MAX_IMAGES = 5; // front, back, tag, detail, one more — sufficient for a complete listing
 
 function toImageBlocks(images: AnalyzeRequestBody["images"]): ImageBlock[] {
   const blocks: ImageBlock[] = [];
@@ -121,11 +121,11 @@ export async function POST(req: NextRequest) {
 
     // Retry up to 3 times, mirroring the Python analyze_photos() loop.
     let lastErr: unknown = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 1; attempt++) {
       try {
         const resp = await client.messages.create({
           model: ANALYSIS_MODEL,
-          max_tokens: 4000,
+          max_tokens: 2500,
           // Lets the model look up the brand's official size chart for
           // measurements instead of estimating from photos. The prompt
           // requires trying multiple query angles (brand site, retailer
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
             {
               type: "web_search_20250305",
               name: "web_search",
-              max_uses: 4,
+              max_uses: 2,
             },
           ],
           // System prompt is large and identical across requests for the same
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
         const fatal = anthropicAuthError(err);
         if (fatal) throw fatal; // auth/billing won't fix itself on retry
         lastErr = err;
-        if (attempt < 2) {
+        if (attempt < 0) {
           await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
         }
       }
@@ -190,6 +190,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
+
 
 
 
