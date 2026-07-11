@@ -986,6 +986,7 @@ export async function publishListing(
         }
       }
     }
+  } // end outer if (ebayTitle.length < 77)
 
   const inventoryItem: any = {
     product: {
@@ -1217,6 +1218,7 @@ async function publishOfferWithRecovery(
     error: `Publish failed (${r.status}): ${r.text.slice(0, 300)}`,
   };
 }
+
 
 
 
