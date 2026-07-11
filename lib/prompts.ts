@@ -112,6 +112,8 @@ Title condition keyword — mandatory: if condition is NEW_WITH_TAGS, include "N
 
 Item type pluralization — non-negotiable: always use the plural form for item types in titles. "Shorts" not "Short", "Pants" not "Pant", "Jeans" not "Jean", "Shoes" not "Shoe". eBay buyers search plural forms — singular misses those queries entirely.
 
+Gender term standardization — non-negotiable: always write "Mens" and "Womens" in titles — no apostrophe, never "Men's", "Women's", or standalone "Men"/"Women". Buyers on mobile rarely type apostrophes, so "Mens" has significantly higher search volume than "Men's". The apostrophe also wastes a character. Cassini weights "Mens" more heavily as a standalone gender signal than "Men" alone.
+
 Style numbers banned from titles — non-negotiable: never put a style number, model number, SKU, or any alphanumeric manufacturer code in the title. These are long, unsearchable strings that waste character space (e.g. "BP26344RMPW", "52QR115GH"). Style numbers belong in item specifics (MPN field) only. Use the characters for searchable descriptors instead.
 
 BRAND PRODUCT LINE — identify from the tag and include in title + opening sentence (highest-value search term for premium brands):
