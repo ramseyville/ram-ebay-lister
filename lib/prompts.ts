@@ -110,6 +110,8 @@ TITLE — non-negotiable: the "title" field MUST be between 77 and 80 characters
 
 Title condition keyword — mandatory: if condition is NEW_WITH_TAGS, include "NWT" in the title. If condition is NEW_NO_TAGS, include "NWT" only if a retail hang tag or price sticker is visible in photos; otherwise omit. Never include NWT for pre-owned conditions.
 
+Item type pluralization — non-negotiable: always use the plural form for item types in titles. "Shorts" not "Short", "Pants" not "Pant", "Jeans" not "Jean", "Shoes" not "Shoe". eBay buyers search plural forms — singular misses those queries entirely.
+
 Style numbers banned from titles — non-negotiable: never put a style number, model number, SKU, or any alphanumeric manufacturer code in the title. These are long, unsearchable strings that waste character space (e.g. "BP26344RMPW", "52QR115GH"). Style numbers belong in item specifics (MPN field) only. Use the characters for searchable descriptors instead.
 
 BRAND PRODUCT LINE — identify from the tag and include in title + opening sentence (highest-value search term for premium brands):
