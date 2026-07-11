@@ -304,6 +304,7 @@ export default function Home() {
       const group = groupsRef.current.find((g) => g.id === groupId);
       if (!group) return;
       const imgs = group.photoIds
+        .slice(0, 5) // cap at 5 photos — sufficient for complete listing, major cost saving
         .map((id) => photoMap.get(id))
         .filter((p): p is Photo => Boolean(p))
         .map((p) => ({ mediaType: p.mediaType, data: p.data }));
