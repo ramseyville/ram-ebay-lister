@@ -23,9 +23,39 @@ export function parseModelJson<T = unknown>(raw: string): T {
   try {
     return JSON.parse(text) as T;
   } catch {
+    // Try extracting the outermost {...} block first
     const match = text.match(/\{[\s\S]*\}/);
     if (match) {
-      return JSON.parse(match[0]) as T;
+      try {
+        return JSON.parse(match[0]) as T;
+      } catch {
+        // JSON is likely truncated mid-stream (hit max_tokens).
+        // Attempt recovery by closing any open string and object/array brackets.
+        let truncated = match[0];
+        // Count unclosed brackets
+        let depth = 0;
+        let inString = false;
+        let escape = false;
+        for (const ch of truncated) {
+          if (escape) { escape = false; continue; }
+          if (ch === "\\") { escape = true; continue; }
+          if (ch === "\"" && !inString) { inString = true; continue; }
+          if (ch === "\"" && inString) { inString = false; continue; }
+          if (!inString) {
+            if (ch === "{" || ch === "[") depth++;
+            if (ch === "}" || ch === "]") depth--;
+          }
+        }
+        // Close open string if needed, then close open brackets
+        let repaired = truncated;
+        if (inString) repaired += "\"";
+        for (let i = 0; i < depth; i++) repaired += "}";
+        try {
+          return JSON.parse(repaired) as T;
+        } catch {
+          // Recovery failed — throw the original error
+        }
+      }
     }
     throw new Error("Model did not return valid JSON.");
   }
@@ -70,3 +100,4 @@ export function anthropicAuthError(e: unknown): AnthropicAuthError | null {
     );
   return null;
 }
+
