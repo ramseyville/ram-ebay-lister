@@ -231,6 +231,13 @@ Rules:
 - Use short descriptive folder names: brand + color + item type, all lowercase, hyphens only
   Examples: "nike-black-dri-fit-top", "coach-tan-leather-tote", "levis-501-blue-jeans"
 
+Photo ordering within each group — IMPORTANT:
+- Position 1: best full-item front shot (clear, complete view of the item)
+- Positions 2-3: tag photos (brand tag, size tag, fabric content tag) — these MUST be in the first 5
+- Positions 4-5: back view and any detail/texture shots
+- Remaining positions: additional angles, close-ups, flat lays
+This order ensures the AI listing tool sees the full item AND all tags within its first 5 photos.
+
 Return ONLY valid JSON:
 {
   "groups": [
