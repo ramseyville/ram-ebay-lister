@@ -106,11 +106,66 @@ Study each photo carefully:
 • For jewelry → identify exact jewelry type (ring, necklace, bracelet, earrings, brooch, pendant, charm, cufflinks, watch accessory, etc.), clasp/closure, main stone, metal/base metal, metal purity or hallmarks (925, 10K, 14K, etc.), signed/maker marks, approximate length, ring size, vintage/antique status, and whether it appears handmade
 • For hard goods → identify brand/maker, exact product type, model name/number, MPN/part number, serial number, UPC/ISBN/barcode if visible, material, dimensions, year/era, country of manufacture, compatibility, included accessories, power source/voltage, capacity, style, theme, character/franchise, pattern, production technique, and any maker marks or stamps
 
-TITLE — non-negotiable: the "title" field MUST be between 77 and 80 characters, counted exactly. This is a hard floor AND ceiling — 76 characters is a failure, 81 characters is a failure. Count the characters in your draft title before committing. If it is under 77, you MUST add more keywords — size, color, material, condition modifier (NWT/Pre-Owned), fit type (Slim Fit, Classic Fit, Regular Fit), occasion (Golf, Resort, Casual), or fabric tech (Performance, Stretch, Cotton) — until it reaches exactly 77-80. A 70-character title is as unacceptable as an 81-character title. Keep adding descriptors until the count is in range. If it is over 80, cut words. Do not return a title outside that range under any circumstances. No filler words. Front-load Brand, then Item Type, then size/color/condition descriptors. Every word must be a real search keyword — no marketing fluff ("Beautiful", "Amazing", "Must See"). Retail price in title: ONLY include a retail/MSRP price if it is $90 or higher AND it fits within the 80-character limit — high prices signal premium value and justify your asking price. NEVER include a low or ordinary retail price (e.g. $24.99, $39.99) — it wastes a keyword slot and signals low value to buyers scanning results. When included, format as "$145 retail" or "$225 NWT" at the end of the title.
+TITLE — the most important SEO element in the listing. Cassini ranks primarily on title keywords. Every character must earn its place.
 
-Title condition keyword — mandatory: if condition is NEW_WITH_TAGS, include "NWT" in the title. If condition is NEW_NO_TAGS, include "NWT" only if a retail hang tag or price sticker is visible in photos; otherwise omit. Never include NWT for pre-owned conditions.
+HARD RULE: exactly 77-80 characters. Count before finalizing. 76 = fail. 81 = fail. Non-negotiable.
 
-Item type pluralization — non-negotiable: always use the plural form for item types in titles. "Shorts" not "Short", "Pants" not "Pant", "Jeans" not "Jean", "Shoes" not "Shoe". eBay buyers search plural forms — singular misses those queries entirely.
+KEYWORD STRATEGY — titles must be built from high-search-volume terms in this priority order:
+
+1. BRAND (always first — highest Cassini weight): Use the full brand name as buyers search it.
+   "Peter Millar" not "PM" | "Polo Ralph Lauren" not "Ralph Lauren" | "Tommy Bahama" not "Tommy"
+
+2. PRODUCT LINE (second — often the highest-value term for premium brands):
+   "Crown Sport" | "Gulf Stream" | "Skipjack" | "IslandZone" | "Classic Fit" | "Slim Fit"
+   Only include if visible on tag or confidently identifiable. Skip if unknown.
+
+3. GENDER: "Mens" (never "Men's" or "Men")
+
+4. ITEM TYPE (plural always): "Polo Shirt" | "Shorts" | "Pants" | "Button Down Shirt" |
+   "Quarter Zip Pullover" | "Bomber Jacket" | "Chino Shorts" | "Board Shorts" | "Dress Pants"
+   Be specific — "Performance Polo Shirt" outranks "Polo Shirt" | "Chino Shorts" outranks "Shorts"
+
+5. KEY DESCRIPTORS in order of search volume:
+   - Color: most-searched color term ("Navy Blue" > "Navy" | "Heather Gray" > "Gray")
+   - Size: exactly as on tag ("XL" | "Large" | "32x34" | "32")
+   - Material/tech: only if high-value search term ("Performance" | "Stretch" | "Cotton" |
+     "Linen" | "Merino Wool" | "Moisture Wicking" | "UPF 50")
+   - Fit: "Slim Fit" | "Classic Fit" | "Regular Fit" | "Relaxed Fit" | "Athletic Fit"
+   - Occasion: "Golf" | "Resort" | "Business Casual" | "Casual" (only if space allows)
+   - NWT (if applicable — always at or near end)
+
+TITLE FORMULA by category:
+• Polo/Golf shirts: [Brand] [Line] Mens [Color] Performance Polo Shirt [Size] [Fit] [NWT]
+  Example: "Peter Millar Crown Sport Mens Navy Blue Performance Polo Shirt Large NWT" (73 chars — add fit)
+  Better:  "Peter Millar Crown Sport Mens Navy Blue Performance Polo Shirt Large Slim NWT" (77 ✅)
+
+• Button-down shirts: [Brand] Mens [Material] [Color] Button Down Shirt [Size] [NWT]
+  Example: "Tommy Bahama Mens Silk Camp Collar Button Down Shirt Blue Floral XL NWT" (71 — add detail)
+  Better:  "Tommy Bahama Mens Silk IslandZone Camp Collar Button Down Shirt Blue XL NWT" (75 — add more)
+  Best:    "Tommy Bahama Mens Silk IslandZone Camp Collar Button Down Shirt Blue XL NWT $128" (81 — trim)
+
+• Shorts: [Brand] Mens [Color] [Type] Shorts [Size] [Fit] [NWT/condition]
+  Example: "AG Adriano Goldschmied Mens Khaki Wanderer Slim Trouser Shorts 31 NWT" (70 — too short)
+  Better:  "AG Adriano Goldschmied Mens Khaki Wanderer Slim Trouser Chino Shorts 31 NWT" (76 — add 1)
+  Best:    "AG Adriano Goldschmied Mens Khaki Wanderer Slim Trouser Chino Shorts Size 31 NWT" (81 — trim)
+
+• Pants: [Brand] Mens [Color] [Material/Style] Pants [Waist]x[Inseam] [Fit] [NWT]
+
+• Jackets: [Brand] Mens [Color] [Material] [Type] Jacket [Size] [NWT/condition]
+
+WHAT TO NEVER INCLUDE IN TITLES:
+- Style numbers or model codes ("BP26344RMPW")
+- "Pre-Owned" or "Used" (kills click-through)
+- Marketing adjectives ("Beautiful", "Amazing", "Rare", "Stunning")
+- Retail prices under $90
+- Filler words ("very", "nice", "great", "look")
+- Apostrophes in "Men's" or "Women's" — always "Mens" / "Womens"
+- Item type in singular — always "Shorts" not "Short", "Pants" not "Pant"
+
+NWT rule: include "NWT" if condition is NEW_WITH_TAGS. For NEW_NO_TAGS include only if a hang tag or price sticker is visible in photos.
+
+Retail price rule: only include if $90 or higher AND it fits in 80 chars. Format: "$145 retail" or "$225 NWT".
+
 
 Gender term standardization — non-negotiable: always write "Mens" and "Womens" in titles — no apostrophe, never "Men's", "Women's", or standalone "Men"/"Women". Buyers on mobile rarely type apostrophes, so "Mens" has significantly higher search volume than "Men's". The apostrophe also wastes a character. Cassini weights "Mens" more heavily as a standalone gender signal than "Men" alone.
 
