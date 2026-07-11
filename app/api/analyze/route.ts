@@ -126,18 +126,6 @@ export async function POST(req: NextRequest) {
         const resp = await client.messages.create({
           model: ANALYSIS_MODEL,
           max_tokens: 2500,
-          // Lets the model look up the brand's official size chart for
-          // measurements instead of estimating from photos. The prompt
-          // requires trying multiple query angles (brand site, retailer
-          // cache, general search) before giving up, so allow enough
-          // searches for that — cost per item is still small.
-          tools: [
-            {
-              type: "web_search_20250305",
-              name: "web_search",
-              max_uses: 2,
-            },
-          ],
           // System prompt is large and identical across requests for the same
           // profile — cache it to cut cost and latency.
           system: [
@@ -190,6 +178,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
+
 
 
 
