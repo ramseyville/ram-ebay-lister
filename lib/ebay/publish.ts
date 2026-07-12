@@ -325,7 +325,18 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
   put("Brand", String(listing.brand || "").trim());
   put("Size", String(listing.size || "").trim());
   put("Color", singleValue(listing.color));
-  put("Material", singleValue(listing.material));
+  // Material must be the actual fabric content, not an instruction note.
+  // Strip common placeholder phrases the model sometimes generates.
+  const rawMaterial = singleValue(listing.material) || "";
+  const cleanMaterial = rawMaterial
+    .replace(/see tag[^,]*/gi, "")
+    .replace(/not visible[^,]*/gi, "")
+    .replace(/\(performance fabric[^)]*\)/gi, "")
+    .replace(/exact percentages not[\w\s]*/gi, "")
+    .replace(/—.*$/g, "")  // cut anything after an em-dash
+    .split(",")[0]           // take first material only if multiple
+    .trim();
+  put("Material", cleanMaterial);
   put("Type", String(listing.item_type || "").trim());
 
   // Features is SELECTION_ONLY on eBay — only specific values are indexed.
@@ -485,6 +496,14 @@ function freeTextDefault(name: string, listing: ListingResult): string {
   return "";
 }
 
+// Fabric Type values that are actually item types, not fabrics.
+// If the model puts these in Fabric Type, clear the field so eBay's
+// taxonomy reconciler can assign the correct fabric value.
+const INVALID_FABRIC_TYPES = new Set([
+  "dress pants", "pants", "shorts", "shirt", "polo", "jacket", "coat",
+  "jeans", "trousers", "vest", "sweater", "hoodie", "blazer", "suit",
+]);
+
 // Aspects that should always default to "No" unless the listing explicitly
 // says otherwise — the model has no business inventing custom/handmade items.
 const FORCE_NO_ASPECTS = new Set(["Handmade", "Personalize", "Personalized"]);
@@ -527,6 +546,15 @@ function reconcileAspects(
         continue;
       }
       // Model set a non-default value — trust it (e.g. a hoodie top with Hood: Yes).
+    }
+
+    // Clear Fabric Type if it contains an item type name instead of an actual fabric.
+    if (a.name === "Fabric Type") {
+      const val = (aspects["Fabric Type"]?.[0] || "").toLowerCase().trim();
+      if (INVALID_FABRIC_TYPES.has(val)) {
+        delete aspects["Fabric Type"];
+        continue;
+      }
     }
 
     // Force Handmade/Personalize to "No" regardless of what the model put there.
