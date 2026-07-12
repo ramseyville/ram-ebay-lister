@@ -199,7 +199,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation:
   "category": "mens_top|mens_pants|mens_shorts|mens_jacket|mens_coat|mens_sweater|mens_jeans|mens_shoes|womens_top|womens_pants|womens_jacket|womens_shoes|handbag|wallet|hat|collectible|hard_goods|other",
   "size": "Size exactly as on tag",
   "color": "Primary color(s)",
-  "material": "Fabric content from tag",
+  "material": "Fabric content exactly as printed on the tag — e.g. '100% Cotton', '55% Supima Cotton 45% Polyester'. If not visible on any tag in the photos, write the primary fiber only if you can confidently determine it from context (e.g. '100% Cotton' for a clearly cotton item). NEVER write 'See tag', 'not visible', instruction text, or sentences with dashes. If truly unknown, leave blank.",
   "condition": "NEW_WITH_TAGS|NEW_NO_TAGS|EXCELLENT|VERY_GOOD|GOOD",
   "condition_notes": "Specific flaw details by location, or explicit confirmation of no flaws",
   "suggested_price": "NEEDS_RESEARCH",
@@ -244,7 +244,8 @@ Size Type: "Regular" | "Big & Tall" | "Slim" | "Athletic" | "Short" | "Tall"
 Fit: "Regular" | "Slim" | "Relaxed" | "Athletic Fit" | "Straight" | "Classic Fit" | "Modern Fit" | "Oversized"
 Sleeve Length: "Long Sleeve" | "Short Sleeve" | "3/4 Sleeve" | "Sleeveless" | "Cap Sleeve"
 Neckline: "Crew Neck" | "V-Neck" | "Turtleneck" | "Mock Neck" | "Cowl Neck" | "Scoop Neck" | "Boat Neck" | "Henley"
-Collar Style: "Button-Down" | "Polo" | "Mandarin/Banded" | "Spread" | "Point" | "Lapel" | "Shawl" | "No Collar"
+Collar Style: "Polo" (for polo shirts with ribbed collar and 2-3 button placket — NEVER use Button-Down for polos) | "Button-Down" (ONLY for Oxford/dress shirts where the collar points button to the shirt body) | "Mandarin/Banded" | "Spread" | "Point" | "Lapel" | "Shawl" | "No Collar" | "Stand-Up"
+Fabric Type: The WEAVE or CONSTRUCTION of the fabric itself — NOT the item type. Use: Twill | Denim | Corduroy | Knit | Jersey | Fleece | Flannel | Chino | Canvas | Woven | Ripstop | Mesh | Terry | Velour | Piqué | Oxford Weave | Dobby | French Terry. NEVER write "Dress Pants", "Polo", "Shirt", or any item type here.
 Closure: "Button" | "Full Zip" | "Half Zip" | "Pullover" | "Snap" | "Hook & Eye" | "Lace-Up" | "Magnetic" | "No Closure"
 Occasion: "Casual" | "Business" | "Business Casual" | "Formal" | "Athletic" | "Outdoor" | "Golf" | "Travel" | "Vacation" | "Beach"
 Season: "Spring" | "Summer" | "Fall" | "Winter" | "All Seasons"
@@ -270,7 +271,7 @@ CUSTOM ITEM SPECIFICS — beyond eBay's standard fields, add these as additional
 • "Fit Type" — True to Size | Runs Small | Runs Large | Athletic Cut | Relaxed Through Thigh
 • "Inseam Length" — numeric inseam from size chart for all pants
 • "Performance Features" — for technical fabrics: Moisture-Wicking | Four-Way Stretch | UPF 50+ | Quick-Dry | Wrinkle-Resistant | Anti-Odor | Breathable
-• "Collection" — the brand's specific product line name (Crown Sport | Gulf Stream | Skipjack | Journeyman | etc.)
+• "Product Line" — the brand's specific product line name (Crown Sport | Gulf Stream | Skipjack | Journeyman | TravelSmart | Reserve | IslandZone | etc.) — use "Product Line" not "Collection" as eBay's taxonomy recognizes "Product Line" as an indexed field for menswear
 
 Before returning the JSON, silently re-check: (1) title is exactly 77-80 characters, follows the locked formula, contains no style numbers, no "Pre-Owned," no "Used," no marketing adjectives, and no retail price unless it is $90 or higher, (2) if condition is NEW_WITH_TAGS the title includes "NWT," (3) suggested_price is the exact literal placeholder string, (4) description has all 8 sections in order — opens with <h2> title, followed by ~160-character keyword-dense opening sentence that includes brand + product line (if known) + gender + size + color + item type + condition + price signal, body paragraph ends with the Best Offer + questions line, SEO/AEO paragraph contains 15+ keywords in natural prose with an entity statement, and closes with the exact upgraded sign-off line including 99.8% and 11,000+, (5) measurements use "approx." prefix from brand size chart knowledge or "See tag" if unknown, (6) Vintage is declared Yes or No for all clothing, (7) Hood/Lining/Rise/Leg Style/Inseam are blank for items where they don't apply, (8) product line name from the brand awareness list is identified and used if visible on the tag, (9) condition section uses the grading scale language, not generic phrases. Fix anything that fails before responding.`;
 
