@@ -328,9 +328,42 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
   put("Material", singleValue(listing.material));
   put("Type", String(listing.item_type || "").trim());
 
+  // Features is SELECTION_ONLY on eBay — only specific values are indexed.
+  // A free-text paragraph stuffed in here gets stored unindexed (or rejected),
+  // which is exactly what eBay's own AI filler does wrong. We pre-validate
+  // against eBay's known accepted Features values before reconcileAspects runs,
+  // dropping anything that doesn't match a real option.
+  const EBAY_FEATURES_ALLOWED = new Set([
+    "Moisture Wicking", "Quick Dry", "Stretch", "4-Way Stretch", "2-Way Stretch",
+    "UPF Protection", "UPF 50+", "UV Protection", "Sun Protection",
+    "Breathable", "Lightweight", "Insulated", "Waterproof", "Water Resistant",
+    "Wind Resistant", "Stain Resistant", "Wrinkle Resistant", "Wrinkle-Free",
+    "Machine Washable", "Anti-Odor", "Antimicrobial",
+    "Adjustable Waist", "Elastic Waist", "Drawstring", "Belt Loops",
+    "Pockets", "Zip Pockets", "Hidden Pockets", "Cargo Pockets",
+    "Reversible", "Packable", "Vented", "Mesh Lining", "Lined",
+    "Short Sleeve", "Long Sleeve", "Sleeveless",
+    "Button-Down Collar", "Performance", "Athletic Fit",
+    "Fair Trade Certified", "Organic", "Recycled Material", "Sustainable",
+  ]);
+
   const feats = Array.isArray(listing.key_features) ? listing.key_features : [];
-  const cleanFeats = feats.map((f) => clipAspectValue(String(f))).filter(Boolean).slice(0, 5);
-  if (cleanFeats.length) aspects.Features = cleanFeats;
+  const validFeats = feats
+    .map((f) => String(f).trim())
+    .filter((f) => {
+      // Must match an allowed value (case-insensitive)
+      const fl = f.toLowerCase();
+      for (const allowed of EBAY_FEATURES_ALLOWED) {
+        if (allowed.toLowerCase() === fl) return true;
+      }
+      // Also reject anything that looks like a sentence/paragraph
+      // (contains em-dash, multiple commas, or is longer than 30 chars
+      // with no match — it's descriptive prose, not a feature tag)
+      if (f.includes("—") || f.includes(" — ") || f.split(",").length > 2 || f.length > 30) return false;
+      return false; // unknown value — drop it; reconcileAspects will match from taxonomy
+    })
+    .slice(0, 5);
+  if (validFeats.length) aspects.Features = validFeats;
 
   if (APPAREL_CATEGORIES.has(catKey) || catKey === "accessory") {
     aspects.Department = [departmentForCategory(catKey)];
@@ -1218,6 +1251,7 @@ async function publishOfferWithRecovery(
     error: `Publish failed (${r.status}): ${r.text.slice(0, 300)}`,
   };
 }
+
 
 
 
