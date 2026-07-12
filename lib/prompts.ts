@@ -220,7 +220,18 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation:
     "Country/Region of Manufacture": "country from tag if visible",
     "MPN": "style number from tag if visible"
   },
-  "key_features": ["feature1", "feature2"],
+  "key_features": ["Moisture Wicking", "Stretch"],
+  // key_features MUST be values from eBay's approved Features list only.
+  // NEVER write descriptive sentences, paragraphs, or marketing copy here.
+  // eBay's Features field is SELECTION_ONLY — only these exact values are indexed by Cassini.
+  // Approved values (use only): Moisture Wicking | Quick Dry | Stretch | 4-Way Stretch |
+  // UPF Protection | UPF 50+ | UV Protection | Breathable | Lightweight | Insulated |
+  // Waterproof | Water Resistant | Wind Resistant | Stain Resistant | Wrinkle Resistant |
+  // Machine Washable | Anti-Odor | Adjustable Waist | Elastic Waist | Drawstring |
+  // Pockets | Zip Pockets | Reversible | Packable | Vented | Mesh Lining | Performance |
+  // Organic | Recycled Material | Sustainable
+  // Include only features that genuinely apply. 2-4 values is ideal. Never include
+  // brand marketing, retail price, colorway descriptions, or button/placket details.
   "item_profile": "clothing|hard_goods|art|media|collectibles"
 }
 For title: Count the characters before finalizing. It MUST be 77-80 characters — not "around" that range. Use the most searchable nouns: brand, item type, material, size, color, era, character, theme, or pattern when supported by the photos. No marketing adjectives.
