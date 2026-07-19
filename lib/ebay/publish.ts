@@ -983,6 +983,21 @@ export async function publishListing(
 
   let ebayTitle = normalizeTitle(String(listing.title || "Untitled").trim()).slice(0, 80);
 
+  // Strip instruction text / placeholder phrases that sometimes bleed into titles.
+  // These are internal notes that have no place in a buyer-facing title.
+  const TITLE_STRIP_PHRASES = [
+    /\bsee tag\b/gi,
+    /\bcheck tag\b/gi,
+    /\bnot visible\b/gi,
+    /\bneeds verification\b/gi,
+    /\bsee photos\b/gi,
+    /\bapprox\.?\b/gi,
+    /\bverify\b/gi,
+  ];
+  for (const pattern of TITLE_STRIP_PHRASES) {
+    ebayTitle = ebayTitle.replace(pattern, "").replace(/\s{2,}/g, " ").trim();
+  }
+
   // Strip any retail price under $90 from the title — low prices waste keyword
   // space and signal low value. Only $90+ retail prices are worth the characters.
   ebayTitle = ebayTitle.replace(/\s*\$(\d+(?:\.\d{2})?)\s*(?:retail|msrp|NWT)?/gi, (match, amount) => {
@@ -1279,6 +1294,7 @@ async function publishOfferWithRecovery(
     error: `Publish failed (${r.status}): ${r.text.slice(0, 300)}`,
   };
 }
+
 
 
 
