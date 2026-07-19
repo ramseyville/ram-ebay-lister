@@ -154,6 +154,8 @@ TITLE FORMULA by category:
 • Jackets: [Brand] Mens [Color] [Material] [Type] Jacket [Size] [NWT/condition]
 
 WHAT TO NEVER INCLUDE IN TITLES:
+- "See tag", "Check tag", "See photos", "Not visible", "Approx.", or ANY placeholder/instruction text
+- Material uncertainty — if you don't know the fabric, omit it from the title entirely. Never write "See tag" as a title keyword.
 - Style numbers or model codes ("BP26344RMPW")
 - "Pre-Owned" or "Used" (kills click-through)
 - Marketing adjectives ("Beautiful", "Amazing", "Rare", "Stunning")
