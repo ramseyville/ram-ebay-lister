@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       try {
         const resp = await client.messages.create({
           model: ANALYSIS_MODEL,
-          max_tokens: 3500,
+          max_tokens: 8000,
           // System prompt is large and identical across requests for the same
           // profile — cache it to cut cost and latency.
           system: [
@@ -178,6 +178,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
+
 
 
 
