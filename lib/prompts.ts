@@ -189,7 +189,7 @@ DESCRIPTION STRUCTURE — HTML only, 8 sections in order, no labels visible to b
 6. <p> Condition: NWT="New with original tags, retail $X. Never worn." | NNT="Unworn, no tags, no flaws." | EXCELLENT="Worn 1-2× max. No pilling, fading, pulls, stains. Colors vibrant. All closures functional. Seams tight." | VERY_GOOD="Light wear 2-4 wears. [specific detail] on [specific location]. No staining, fading, structural issues." | GOOD="Moderate wear. [Specific flaw] on [location]. No holes, functional." Call every flaw by location. Never generic.
 7. <p> SEO/AEO: 2-3 natural sentences, 15+ keywords in prose (brand ×2, product line, item type, size, color, fabric tech, occasion ×2+, condition modifier, buyer-intent phrase). Include one AEO entity statement: brand + product line + gender + size + color + type + condition + price signal in one extractable sentence. No labels, no keyword lists.
 8. <p><em>Find more quality men's clothing, antiques, and collectibles at Courthouse Square Deals — a Denton, Texas seller with 99.8% positive feedback across 11,000+ sales. We ship fast, pack with care, and stand behind every item. Best Offer welcome.</em></p>
-HTML: <h2> <p> <ul> <li> <em> <strong> only. No CSS, divs, classes, html/head/body, emojis, or internal labels.
+HTML: <h2> <p> <ul> <li> <em> <strong> only. No CSS, divs, classes, html/head/body, emojis, or internal labels. Target 300-500 words total — concise and keyword-rich outperforms verbose.
 
 Return ONLY valid JSON — no markdown, no code fences, no explanation:
 {
@@ -358,5 +358,6 @@ export function slugifyFolderName(raw: string): string {
   const cleaned = lowered.replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-");
   return cleaned.replace(/^-+|-+$/g, "") || "item";
 }
+
 
 
