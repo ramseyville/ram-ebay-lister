@@ -148,14 +148,33 @@ export async function POST(req: NextRequest) {
             },
           ],
         });
-        const listing = parseModelJson<ListingResult>(lastText(resp));
+        // If the model hit the token limit, retry with 3 photos instead of 5
+        // to reduce input size and give the output more room to complete.
+        let finalResp = resp;
+        if (resp.stop_reason === "max_tokens" && imageBlocks.length > 3) {
+          console.error("[analyze] max_tokens hit — retrying with 3 photos");
+          finalResp = await client.messages.create({
+            model: ANALYSIS_MODEL,
+            max_tokens: 8000,
+            system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+            messages: [{
+              role: "user",
+              content: [
+                ...imageBlocks.slice(0, 3),
+                { type: "text", text: "Analyze these photos and return the listing JSON now." },
+              ],
+            }],
+          });
+        }
+        const rawText = lastText(finalResp);
+        const listing = parseModelJson<ListingResult>(rawText);
         listing.item_profile = profile;
         // Return token usage so the client can track cost per listing.
         const usage = {
-          input_tokens: resp.usage?.input_tokens ?? 0,
-          output_tokens: resp.usage?.output_tokens ?? 0,
-          cache_read_input_tokens: (resp.usage as any)?.cache_read_input_tokens ?? 0,
-          cache_creation_input_tokens: (resp.usage as any)?.cache_creation_input_tokens ?? 0,
+          input_tokens: finalResp.usage?.input_tokens ?? 0,
+          output_tokens: finalResp.usage?.output_tokens ?? 0,
+          cache_read_input_tokens: (finalResp.usage as any)?.cache_read_input_tokens ?? 0,
+          cache_creation_input_tokens: (finalResp.usage as any)?.cache_creation_input_tokens ?? 0,
         };
         return NextResponse.json({ ok: true, listing, usage });
       } catch (err) {
