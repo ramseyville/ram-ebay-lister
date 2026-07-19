@@ -53,7 +53,15 @@ export function parseModelJson<T = unknown>(raw: string): T {
         try {
           return JSON.parse(repaired) as T;
         } catch {
-          // Recovery failed — throw the original error
+          // Final attempt: find the last complete top-level property
+          // by truncating to the last ," or last complete value
+          const lastComma = truncated.lastIndexOf(',"');
+          if (lastComma > 10) {
+            try {
+              const truncAtComma = truncated.slice(0, lastComma) + "}";
+              return JSON.parse(truncAtComma) as T;
+            } catch { /* give up */ }
+          }
         }
       }
     }
@@ -100,4 +108,5 @@ export function anthropicAuthError(e: unknown): AnthropicAuthError | null {
     );
   return null;
 }
+
 
