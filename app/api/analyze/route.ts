@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
 
     // Retry up to 3 times, mirroring the Python analyze_photos() loop.
     let lastErr: unknown = null;
-    for (let attempt = 0; attempt < 1; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const resp = await client.messages.create({
           model: ANALYSIS_MODEL,
@@ -236,7 +236,8 @@ export async function POST(req: NextRequest) {
         const fatal = anthropicAuthError(err);
         if (fatal) throw fatal; // auth/billing won't fix itself on retry
         lastErr = err;
-        if (attempt < 0) {
+        console.error(`[analyze] attempt ${attempt + 1} failed:`, err);
+        if (attempt < 2) {
           await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
         }
       }
