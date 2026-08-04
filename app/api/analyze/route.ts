@@ -66,6 +66,60 @@ function firstText(resp: Anthropic.Message): string {
   return block && block.type === "text" ? block.text.trim() : "";
 }
 
+// The 77-80 char title rule is protocol, not a suggestion — the model's own
+// "silently re-check" step in the prompt is not reliable enough to trust on
+// its own (LLMs are bad at exact character counting). Enforce it in code:
+// if the title comes back out of range, send one focused follow-up asking
+// only for a corrected title, rather than trusting a full regeneration.
+async function repairTitleLength(
+  client: Anthropic,
+  listing: ListingResult
+): Promise<void> {
+  const title = listing.title ?? "";
+  if (title.length >= 77 && title.length <= 80) return;
+
+  const MAX_ATTEMPTS = 2;
+  for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    const current = listing.title ?? "";
+    if (current.length >= 77 && current.length <= 80) return;
+
+    try {
+      const resp = await client.messages.create({
+        model: ANALYSIS_MODEL,
+        max_tokens: 300,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `This eBay listing title is ${current.length} characters. It MUST be exactly 77-80 characters — non-negotiable. Current title: "${current}"\n\nRevise it to fall within 77-80 characters by adding or trimming searchable keywords (color, material, fit, occasion, size format) — do not change the brand, item type, or condition claims. Count the characters yourself before answering. Respond with ONLY this JSON, nothing else: {"title": "..."}`,
+              },
+            ],
+          },
+        ],
+      });
+      const text = firstText(resp);
+      const fixed = parseModelJson<{ title?: string }>(text);
+      if (fixed?.title) {
+        listing.title = fixed.title;
+      }
+    } catch (e) {
+      // Non-fatal — if the repair call itself fails, fall through and
+      // return whatever title we have rather than failing the whole listing.
+      console.error("[analyze] title repair attempt failed:", e);
+      return;
+    }
+  }
+
+  const finalLen = (listing.title ?? "").length;
+  if (finalLen < 77 || finalLen > 80) {
+    console.error(
+      `[analyze] title still out of range after repair attempts: ${finalLen} chars — "${listing.title}"`
+    );
+  }
+}
+
 // When web_search is enabled the model may emit a text block before the
 // tool call (e.g. "Let me check the size chart...") and the real JSON
 // payload in a later text block after the search result. Take the LAST
@@ -169,6 +223,7 @@ export async function POST(req: NextRequest) {
         const rawText = lastText(finalResp);
         const listing = parseModelJson<ListingResult>(rawText);
         listing.item_profile = profile;
+        await repairTitleLength(client, listing);
         // Return token usage so the client can track cost per listing.
         const usage = {
           input_tokens: finalResp.usage?.input_tokens ?? 0,
