@@ -75,13 +75,22 @@ async function repairTitleLength(
   client: Anthropic,
   listing: ListingResult
 ): Promise<void> {
-  const title = listing.title ?? "";
-  if (title.length >= 77 && title.length <= 80) return;
+  const originalTitle = listing.title ?? "";
+  if (originalTitle.length >= 77 && originalTitle.length <= 80) return;
 
-  const MAX_ATTEMPTS = 2;
+  console.error(
+    `[analyze] title out of range from initial generation: ${originalTitle.length} chars — "${originalTitle}"`
+  );
+
+  const MAX_ATTEMPTS = 3;
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
     const current = listing.title ?? "";
     if (current.length >= 77 && current.length <= 80) return;
+
+    const direction =
+      current.length < 77
+        ? `It is TOO SHORT by ${77 - current.length}-${80 - current.length} characters. Add more searchable keywords — do not just pad with filler words. Good options to add, in priority order: a size format variant (e.g. "Size Large" instead of "L"), fabric/material name, fit descriptor (Slim, Relaxed, Regular), color detail, era/decade if vintage, or an occasion/use phrase (Casual, Workwear).`
+        : `It is TOO LONG by ${current.length - 80} characters. Trim the least essential descriptor — keep brand, item type, color, and size intact.`;
 
     try {
       const resp = await client.messages.create({
@@ -93,7 +102,7 @@ async function repairTitleLength(
             content: [
               {
                 type: "text",
-                text: `This eBay listing title is ${current.length} characters. It MUST be exactly 77-80 characters — non-negotiable. Current title: "${current}"\n\nRevise it to fall within 77-80 characters by adding or trimming searchable keywords (color, material, fit, occasion, size format) — do not change the brand, item type, or condition claims. Count the characters yourself before answering. Respond with ONLY this JSON, nothing else: {"title": "..."}`,
+                text: `This eBay listing title is exactly ${current.length} characters, counted with a monospace ruler. It MUST be 77-80 characters — this is non-negotiable protocol, not a guideline.\n\nCurrent title: "${current}"\n\n${direction}\n\nDo not change the brand, item type, or condition claims. Count every character of your revised title (including spaces) before answering — write out the count mentally first. Respond with ONLY this JSON, nothing else, no explanation: {"title": "..."}`,
               },
             ],
           },
@@ -103,10 +112,13 @@ async function repairTitleLength(
       const fixed = parseModelJson<{ title?: string }>(text);
       if (fixed?.title) {
         listing.title = fixed.title;
+        console.error(
+          `[analyze] title repair attempt ${i + 1}: ${fixed.title.length} chars — "${fixed.title}"`
+        );
+      } else {
+        console.error(`[analyze] title repair attempt ${i + 1} returned no title field, raw: "${text}"`);
       }
     } catch (e) {
-      // Non-fatal — if the repair call itself fails, fall through and
-      // return whatever title we have rather than failing the whole listing.
       console.error("[analyze] title repair attempt failed:", e);
       return;
     }
@@ -115,7 +127,7 @@ async function repairTitleLength(
   const finalLen = (listing.title ?? "").length;
   if (finalLen < 77 || finalLen > 80) {
     console.error(
-      `[analyze] title still out of range after repair attempts: ${finalLen} chars — "${listing.title}"`
+      `[analyze] title still out of range after ${MAX_ATTEMPTS} repair attempts: ${finalLen} chars — "${listing.title}" (original was "${originalTitle}")`
     );
   }
 }
