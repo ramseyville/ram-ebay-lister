@@ -89,7 +89,7 @@ async function repairTitleLength(
 
     const direction =
       current.length < 77
-        ? `It is TOO SHORT by ${77 - current.length}-${80 - current.length} characters. Add more searchable keywords — do not just pad with filler words. Good options to add, in priority order: a size format variant (e.g. "Size Large" instead of "L"), fabric/material name, fit descriptor (Slim, Relaxed, Regular), color detail, era/decade if vintage, or an occasion/use phrase (Casual, Workwear).`
+        ? `It is TOO SHORT by ${77 - current.length}-${80 - current.length} characters. Add more searchable keywords — do not pad with generic filler like "Casual." Good options to add, in priority order: a size format variant (e.g. "Size Large" instead of "L"), fabric/material name, fit descriptor (Slim, Relaxed, Regular), color detail, era/decade if vintage, or a genuinely specific occasion (Golf, Resort, Travel, Beach) only if it truly fits the item.`
         : `It is TOO LONG by ${current.length - 80} characters. Trim the least essential descriptor — keep brand, item type, color, and size intact.`;
 
     try {
