@@ -134,7 +134,10 @@ KEYWORD STRATEGY — titles must be built from high-search-volume terms in this 
    - Material/tech: only if high-value search term ("Performance" | "Stretch" | "Cotton" |
      "Linen" | "Merino Wool" | "Moisture Wicking" | "UPF 50")
    - Fit: "Slim Fit" | "Classic Fit" | "Regular Fit" | "Relaxed Fit" | "Athletic Fit"
-   - Occasion: "Golf" | "Resort" | "Business Casual" | "Casual" (only if space allows)
+   - Occasion: "Golf" | "Resort" | "Business Casual" | "Travel" | "Beach" | "Outdoor"
+     Only include if it's a genuine differentiator for the item — never use bare "Casual" as a
+     space-filler. "Casual" alone describes almost every garment and carries no real search
+     signal; if you need characters, reach for a more specific descriptor instead (see #4 below).
    - NWT (if applicable — always at or near end)
 
 TITLE FORMULA by category:
