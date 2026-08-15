@@ -516,6 +516,46 @@ export default function Home() {
     []
   );
 
+  const changeSku = useCallback(
+    async (
+      groupId: string,
+      oldSku: string,
+      newSku: string
+    ): Promise<{ success: boolean; error?: string; warning?: string }> => {
+      const group = groupsRef.current.find((g) => g.id === groupId);
+      if (!group?.listing) return { success: false, error: "No listing data for this item." };
+      const images = group.photoIds
+        .map((id) => photoMap.get(id))
+        .filter((p): p is Photo => Boolean(p))
+        .map((p) => ({ mediaType: p.mediaType, data: p.data }));
+      try {
+        const res = await apiPost("/api/ebay/change-sku", {
+          oldSku,
+          sku: newSku,
+          listing: group.listing,
+          images,
+        });
+        const data = (await readJson(res)) as {
+          success: boolean;
+          listingId?: string;
+          error?: string;
+          warning?: string;
+        };
+        if (data.success) {
+          setGroups((prev) =>
+            prev.map((g) =>
+              g.id === groupId ? { ...g, sku: newSku, listingId: data.listingId } : g
+            )
+          );
+        }
+        return data;
+      } catch (e) {
+        return { success: false, error: (e as Error).message };
+      }
+    },
+    [photoMap]
+  );
+
   const updateLiveQuantity = useCallback(
     async (
       groupId: string,
@@ -791,6 +831,7 @@ export default function Home() {
           onUndoPosted={undoPosted}
           onUpdateLivePrice={updateLivePrice}
           onUpdateLiveQuantity={updateLiveQuantity}
+          onChangeSku={changeSku}
           onSetMainPhoto={setMainPhoto}
           onBack={() => setStep("review")}
           onSaveDraft={handleSaveDraft}
