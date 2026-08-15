@@ -807,6 +807,58 @@ export async function updateOfferQuantity(
   return { success: true };
 }
 
+// ── Retire a SKU after replacing it with a new one ─────────────────────────
+//
+// eBay's Inventory API has no "rename SKU" call — SKU is the resource
+// identifier itself (part of the URL), not an editable field. Changing a
+// live listing's SKU means: publish a new listing under the new SKU (done
+// by the caller via publishListing), then retire the old one here —
+// withdraw its offer (ends the live listing) and delete the inventory item
+// so it doesn't linger as an orphaned, unpublished record.
+export async function retireSku(
+  accessToken: string,
+  sku: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!sku) return { success: false, error: "No SKU provided." };
+
+  const lookup = await ebayRequest(
+    accessToken,
+    "GET",
+    `${EBAY_INV_BASE}/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${EBAY_MARKETPLACE_ID}`
+  );
+  const offer = lookup.ok ? (lookup.json?.offers || [])[0] : null;
+
+  if (offer?.offerId && (offer.status === "PUBLISHED" || offer.listing?.listingId)) {
+    const withdraw = await ebayRequest(
+      accessToken,
+      "POST",
+      `${EBAY_INV_BASE}/offer/${offer.offerId}/withdraw`,
+      { extraHeaders: CL }
+    );
+    if (!withdraw.ok) {
+      return {
+        success: false,
+        error: `Old SKU "${sku}" is still live on eBay — withdraw failed (${withdraw.status}): ${withdraw.text.slice(0, 200)}`,
+      };
+    }
+  }
+
+  const del = await ebayRequest(
+    accessToken,
+    "DELETE",
+    `${EBAY_INV_BASE}/inventory_item/${encodeURIComponent(sku)}`
+  );
+  // 404 here just means it's already gone — fine either way.
+  if (!del.ok && del.status !== 404) {
+    return {
+      success: false,
+      error: `Old listing was ended, but its inventory record (SKU "${sku}") could not be deleted (${del.status}). Not urgent — it's inactive, just no longer tidy.`,
+    };
+  }
+
+  return { success: true };
+}
+
 async function uploadPhoto(
   accessToken: string,
   base64: string,
