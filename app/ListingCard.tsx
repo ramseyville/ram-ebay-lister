@@ -73,6 +73,11 @@ interface ListingCardProps {
     sku: string,
     quantity: number
   ) => Promise<{ success: boolean; error?: string }>;
+  onChangeSku: (
+    groupId: string,
+    oldSku: string,
+    newSku: string
+  ) => Promise<{ success: boolean; error?: string; warning?: string }>;
   onSetMainPhoto: (groupId: string, photoId: string) => void;
 }
 
@@ -88,6 +93,7 @@ export function ListingCard({
   onUndoPosted,
   onUpdateLivePrice,
   onUpdateLiveQuantity,
+  onChangeSku,
   onSetMainPhoto,
 }: ListingCardProps) {
   const [open, setOpen] = useState(true);
@@ -109,6 +115,11 @@ export function ListingCard({
     "idle" | "saving" | "done" | "error"
   >("idle");
   const [quantityUpdateError, setQuantityUpdateError] = useState("");
+  const [newSkuInput, setNewSkuInput] = useState("");
+  const [skuChangeStatus, setSkuChangeStatus] = useState<
+    "idle" | "confirming" | "saving" | "done" | "error"
+  >("idle");
+  const [skuChangeMessage, setSkuChangeMessage] = useState("");
 
   async function runPricingAnalysis() {
     if (!listing) return;
@@ -592,6 +603,84 @@ export function ListingCard({
               {quantityUpdateStatus === "error" && (
                 <p className="post-result err" style={{ marginTop: "0.35rem" }}>
                   ⚠️ {quantityUpdateError}
+                </p>
+              )}
+              <div className="post-row" style={{ marginTop: "0.5rem" }}>
+                <div className="price-input">
+                  <span>New SKU</span>
+                  <input
+                    type="text"
+                    value={newSkuInput}
+                    onChange={(e) => {
+                      setNewSkuInput(e.target.value);
+                      if (skuChangeStatus === "confirming") setSkuChangeStatus("idle");
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={skuChangeStatus === "saving"}
+                  title="eBay has no way to rename a live listing's SKU — this ends the current listing and republishes it under the new SKU with the same photos, title, and price."
+                  onClick={async () => {
+                    const trimmed = newSkuInput.trim();
+                    if (!trimmed) {
+                      setSkuChangeStatus("error");
+                      setSkuChangeMessage("Enter a new SKU.");
+                      return;
+                    }
+                    if (trimmed === group.sku) {
+                      setSkuChangeStatus("error");
+                      setSkuChangeMessage("That's already the current SKU.");
+                      return;
+                    }
+                    if (skuChangeStatus !== "confirming") {
+                      setSkuChangeStatus("confirming");
+                      setSkuChangeMessage(
+                        `This ends the current live listing (#${group.listingId}) and republishes it as a NEW listing under SKU "${trimmed}" — same photos, title, and price, but a new eBay item number. Click again to confirm.`
+                      );
+                      return;
+                    }
+                    setSkuChangeStatus("saving");
+                    setSkuChangeMessage("");
+                    const res = await onChangeSku(group.id, group.sku, trimmed);
+                    if (res.success) {
+                      setSkuChangeStatus("done");
+                      setSkuChangeMessage(
+                        res.warning || `Done — now live under SKU "${trimmed}".`
+                      );
+                      setNewSkuInput("");
+                      setTimeout(() => setSkuChangeStatus("idle"), 4000);
+                    } else {
+                      setSkuChangeStatus("error");
+                      setSkuChangeMessage(res.error || "SKU change failed.");
+                    }
+                  }}
+                >
+                  {skuChangeStatus === "saving" ? (
+                    <>
+                      <span className="spinner" aria-hidden="true" /> Republishing…
+                    </>
+                  ) : skuChangeStatus === "confirming" ? (
+                    "⚠️ Click to confirm"
+                  ) : (
+                    "🔀 Change SKU on eBay"
+                  )}
+                </button>
+              </div>
+              {skuChangeStatus === "confirming" && (
+                <p className="post-result" style={{ marginTop: "0.35rem" }}>
+                  {skuChangeMessage}
+                </p>
+              )}
+              {skuChangeStatus === "done" && (
+                <p className="post-result ok" style={{ marginTop: "0.35rem" }}>
+                  ✅ {skuChangeMessage}
+                </p>
+              )}
+              {skuChangeStatus === "error" && (
+                <p className="post-result err" style={{ marginTop: "0.35rem" }}>
+                  ⚠️ {skuChangeMessage}
                 </p>
               )}
             </div>
