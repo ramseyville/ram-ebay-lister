@@ -34,6 +34,11 @@ interface ListingsViewProps {
     sku: string,
     quantity: number
   ) => Promise<{ success: boolean; error?: string }>;
+  onChangeSku: (
+    groupId: string,
+    oldSku: string,
+    newSku: string
+  ) => Promise<{ success: boolean; error?: string; warning?: string }>;
   onSetMainPhoto: (groupId: string, photoId: string) => void;
 }
 
@@ -53,6 +58,7 @@ export function ListingsView({
   onUndoPosted,
   onUpdateLivePrice,
   onUpdateLiveQuantity,
+  onChangeSku,
   onSetMainPhoto,
 }: ListingsViewProps) {
   const done      = groups.filter((g) => g.status === "done").length;
@@ -165,6 +171,7 @@ export function ListingsView({
             onUndoPosted={onUndoPosted}
             onUpdateLivePrice={onUpdateLivePrice}
             onUpdateLiveQuantity={onUpdateLiveQuantity}
+            onChangeSku={onChangeSku}
             onSetMainPhoto={onSetMainPhoto}
           />
         ))}
