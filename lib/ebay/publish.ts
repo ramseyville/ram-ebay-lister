@@ -725,7 +725,87 @@ export async function updateOfferPrice(
   return { success: true };
 }
 
-// ── Photo upload to eBay Picture Services (Trading API, XML) ──────────────────
+// ── Update quantity on an already-published listing ───────────────────────
+//
+// Same reasoning as updateOfferPrice above: eBay's Seller Hub refuses to
+// quick-edit quantity on Inventory-API-created listings ("Inventory-based
+// listing management is not currently supported by this tool"). Quantity
+// lives on the INVENTORY ITEM (availability.shipToLocationAvailability),
+// not on the offer, so this fetches the current inventory item, patches
+// just the quantity, PUTs the full object back (Inventory API replaces the
+// whole resource), then republishes the offer if it's already live.
+export async function updateOfferQuantity(
+  accessToken: string,
+  sku: string,
+  newQuantity: number
+): Promise<{ success: boolean; error?: string }> {
+  if (!sku) return { success: false, error: "No SKU provided." };
+  if (!Number.isInteger(newQuantity) || newQuantity < 0) {
+    return { success: false, error: "Quantity must be a whole number of 0 or more." };
+  }
+
+  const itemLookup = await ebayRequest(
+    accessToken,
+    "GET",
+    `${EBAY_INV_BASE}/inventory_item/${encodeURIComponent(sku)}`
+  );
+  if (!itemLookup.ok) {
+    return {
+      success: false,
+      error: `Could not find eBay inventory item for SKU ${sku} (${itemLookup.status}).`,
+    };
+  }
+  const inventoryItem = itemLookup.json || {};
+
+  const updatedItem = {
+    ...inventoryItem,
+    availability: {
+      ...(inventoryItem.availability || {}),
+      shipToLocationAvailability: {
+        ...(inventoryItem.availability?.shipToLocationAvailability || {}),
+        quantity: newQuantity,
+      },
+    },
+  };
+
+  const upd = await ebayRequest(
+    accessToken,
+    "PUT",
+    `${EBAY_INV_BASE}/inventory_item/${encodeURIComponent(sku)}`,
+    { body: updatedItem, extraHeaders: CL }
+  );
+  if (![200, 201, 204].includes(upd.status)) {
+    return {
+      success: false,
+      error: `eBay rejected the quantity update (${upd.status}): ${upd.text.slice(0, 200)}`,
+    };
+  }
+
+  // Look up the offer to see if it's live — if so, republish so the
+  // quantity change actually reflects on the active listing.
+  const offerLookup = await ebayRequest(
+    accessToken,
+    "GET",
+    `${EBAY_INV_BASE}/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${EBAY_MARKETPLACE_ID}`
+  );
+  const offer = offerLookup.ok ? (offerLookup.json?.offers || [])[0] : null;
+  if (offer?.offerId && (offer.status === "PUBLISHED" || offer.listing?.listingId)) {
+    const pub = await ebayRequest(
+      accessToken,
+      "POST",
+      `${EBAY_INV_BASE}/offer/${offer.offerId}/publish`,
+      { extraHeaders: CL }
+    );
+    if (!pub.ok) {
+      return {
+        success: false,
+        error: `Quantity saved but republish failed (${pub.status}): ${pub.text.slice(0, 200)}`,
+      };
+    }
+  }
+
+  return { success: true };
+}
 
 async function uploadPhoto(
   accessToken: string,
