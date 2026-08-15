@@ -68,6 +68,11 @@ interface ListingCardProps {
     sku: string,
     price: number
   ) => Promise<{ success: boolean; error?: string }>;
+  onUpdateLiveQuantity: (
+    groupId: string,
+    sku: string,
+    quantity: number
+  ) => Promise<{ success: boolean; error?: string }>;
   onSetMainPhoto: (groupId: string, photoId: string) => void;
 }
 
@@ -82,6 +87,7 @@ export function ListingCard({
   onRenameSku,
   onUndoPosted,
   onUpdateLivePrice,
+  onUpdateLiveQuantity,
   onSetMainPhoto,
 }: ListingCardProps) {
   const [open, setOpen] = useState(true);
@@ -98,6 +104,11 @@ export function ListingCard({
     "idle"
   );
   const [priceUpdateError, setPriceUpdateError] = useState("");
+  const [liveQuantityInput, setLiveQuantityInput] = useState("1");
+  const [quantityUpdateStatus, setQuantityUpdateStatus] = useState<
+    "idle" | "saving" | "done" | "error"
+  >("idle");
+  const [quantityUpdateError, setQuantityUpdateError] = useState("");
 
   async function runPricingAnalysis() {
     if (!listing) return;
@@ -526,6 +537,61 @@ export function ListingCard({
               {priceUpdateStatus === "error" && (
                 <p className="post-result err" style={{ marginTop: "0.35rem" }}>
                   ⚠️ {priceUpdateError}
+                </p>
+              )}
+              <div className="post-row" style={{ marginTop: "0.5rem" }}>
+                <div className="price-input">
+                  <span>Qty</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={liveQuantityInput}
+                    onChange={(e) =>
+                      setLiveQuantityInput(e.target.value.replace(/[^0-9]/g, ""))
+                    }
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={quantityUpdateStatus === "saving"}
+                  title="eBay's Seller Hub blocks quantity edits on listings created via the Inventory API and tells you to use the tool that created them — this is that tool."
+                  onClick={async () => {
+                    const value = parseInt(liveQuantityInput, 10);
+                    if (!Number.isInteger(value) || value < 0) {
+                      setQuantityUpdateStatus("error");
+                      setQuantityUpdateError("Enter a valid quantity (0 or more).");
+                      return;
+                    }
+                    setQuantityUpdateStatus("saving");
+                    setQuantityUpdateError("");
+                    const res = await onUpdateLiveQuantity(group.id, group.sku, value);
+                    if (res.success) {
+                      setQuantityUpdateStatus("done");
+                      setTimeout(() => setQuantityUpdateStatus("idle"), 2500);
+                    } else {
+                      setQuantityUpdateStatus("error");
+                      setQuantityUpdateError(res.error || "Update failed.");
+                    }
+                  }}
+                >
+                  {quantityUpdateStatus === "saving" ? (
+                    <>
+                      <span className="spinner" aria-hidden="true" /> Updating…
+                    </>
+                  ) : (
+                    "📦 Update quantity on eBay"
+                  )}
+                </button>
+              </div>
+              {quantityUpdateStatus === "done" && (
+                <p className="post-result ok" style={{ marginTop: "0.35rem" }}>
+                  ✅ Quantity updated on eBay
+                </p>
+              )}
+              {quantityUpdateStatus === "error" && (
+                <p className="post-result err" style={{ marginTop: "0.35rem" }}>
+                  ⚠️ {quantityUpdateError}
                 </p>
               )}
             </div>
