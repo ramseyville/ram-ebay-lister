@@ -1025,32 +1025,37 @@ export async function publishListing(
       }
     }
 
-    // Second pass — if still short, add category-appropriate descriptor phrases.
-    // These are meaningful search terms, not generic filler.
+    // Second pass — if still short, add descriptors pulled from this item's
+    // OWN item_specifics (already AI-verified for this exact garment) rather
+    // than guessing from a broad category bucket. The old version here
+    // blindly appended "Dress Pants" to every pants-category item (including
+    // joggers/sweatpants) and "Button Down" to every top (including
+    // pullovers/quarter-zips) — those were flat-out wrong for a large share
+    // of items and are gone. Never reintroduce a category → fixed-phrase map
+    // here; only pull values the AI already confirmed for this specific item.
     if (ebayTitle.length < 77) {
+      const specifics = listing.item_specifics || {};
       const cat = (catKey || "").toLowerCase();
       const isPants  = cat.includes("pant") || cat.includes("jean") || cat.includes("trouser");
-      const isShorts = cat.includes("short");
       const isTop    = cat.includes("top") || cat.includes("shirt") || cat.includes("sweater");
       const isJacket = cat.includes("jacket") || cat.includes("coat");
-      const isShoes  = cat.includes("shoe") || cat.includes("boot");
 
-      const phrases = [
-        isPants  ? "Dress Pants" : null,
-        isShorts ? "Casual Shorts" : null,
-        isTop    ? "Button Down" : null,
-        isJacket ? "Outerwear" : null,
-        isShoes  ? "Leather" : null,
-        // Universal — add gender + condition if space allows
+      const fromSpecifics: (string | null)[] = [
+        isPants ? specifics["Leg Style"] || null : null,          // e.g. "Jogger", "Slim", "Straight" — accurate per item
+        isTop || isJacket ? specifics["Closure"] || null : null,  // e.g. "Pullover", "Half Zip", "Button" — accurate per item
+        specifics["Fit"] || null,                                  // e.g. "Slim Fit", "Relaxed Fit"
+        specifics["Fabric Type"] || null,                          // e.g. "Fleece", "Knit", "Twill"
+        specifics["Pattern"] && specifics["Pattern"] !== "Solid" ? specifics["Pattern"] : null,
+        // Condition descriptors — factual, tied to the actual listing.condition, not a guess.
         listing.condition === "NEW_WITH_TAGS" ? "NWT New" : null,
         listing.condition === "EXCELLENT" ? "Excellent Condition" : null,
         listing.condition === "VERY_GOOD" ? "Very Good Condition" : null,
-        // Season/occasion fillers that add genuine search value
-        "Casual",
-        "Classic",
-      ].filter((t): t is string =>
+      ];
+
+      const phrases = fromSpecifics.filter((t): t is string =>
         t !== null &&
         t !== undefined &&
+        t.trim().length > 0 &&
         !ebayTitle.toLowerCase().includes(t.toLowerCase())
       );
 
