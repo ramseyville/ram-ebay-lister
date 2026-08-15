@@ -516,6 +516,23 @@ export default function Home() {
     []
   );
 
+  const updateLiveQuantity = useCallback(
+    async (
+      groupId: string,
+      sku: string,
+      quantity: number
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const res = await apiPost("/api/ebay/update-quantity", { sku, quantity });
+        const data = (await res.json()) as { success: boolean; error?: string };
+        return data;
+      } catch (e) {
+        return { success: false, error: (e as Error).message };
+      }
+    },
+    []
+  );
+
   const handleCostChange = useCallback((groupId: string, cost: number) => {
     setGroups((prev) =>
       prev.map((g) => g.id === groupId ? { ...g, itemCost: cost } : g)
@@ -773,6 +790,7 @@ export default function Home() {
           onRenameSku={renameSku}
           onUndoPosted={undoPosted}
           onUpdateLivePrice={updateLivePrice}
+          onUpdateLiveQuantity={updateLiveQuantity}
           onSetMainPhoto={setMainPhoto}
           onBack={() => setStep("review")}
           onSaveDraft={handleSaveDraft}
