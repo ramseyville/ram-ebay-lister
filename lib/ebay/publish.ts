@@ -16,6 +16,7 @@ import {
   type AspectMeta,
 } from "./taxonomy";
 import type { ListingResult } from "@/lib/types";
+import { estimateShipping } from "@/lib/shipping";
 
 // ── Constants (from the Python script) ───────────────────────────────────────
 
@@ -1060,12 +1061,17 @@ export async function publishListing(
   }
   const condCandidates = conditionCandidates(listing.condition, acceptedConds);
   const condition = condCandidates[0] || "USED_EXCELLENT";
-  // Build packageWeightAndSize from the listing's estimated shipping data.
-  // eBay requires weight for most categories (error 25020 if missing).
-  const weightOz = listing.shipping_weight_oz ?? 16; // default 1 lb if not estimated
+  // Build packageWeightAndSize from a deterministic per-category lookup
+  // (lib/shipping.ts), not the AI's own shipping_weight_oz guess. The prompt
+  // gives the model no real basis to calculate weight, and it was
+  // converging on the same low number for everything — including heavy
+  // sweaters and coats. This table is tuned per category and is the actual
+  // source of truth eBay's payload uses.
+  const shipEstimate = estimateShipping(listing);
+  const weightOz = shipEstimate.weight_oz;
   const lbs = Math.floor(weightOz / 16);
   const oz = weightOz % 16;
-  const dims = listing.shipping_dimensions;
+  const dims = shipEstimate.dimensions;
   const packageWeightAndSize: any = {
     weight: { value: lbs + oz / 16, unit: "POUND" },
     packageType: dims && dims.height <= 1 ? "LETTER" : "PACKAGE_THICK_ENVELOPE",
