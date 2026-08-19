@@ -460,6 +460,30 @@ function matchAllowed(value: string, allowed: string[]): string | null {
   for (const v of allowed) {
     if (v.toLowerCase().startsWith(ls) || ls.startsWith(v.toLowerCase())) return v;
   }
+  // 4. Numeric closest match — for numeric aspects (Inseam, Waist Size, Neck
+  // Size, etc.) where the model's exact value doesn't match eBay's dropdown
+  // format/wording. Without this, reconcileAspects falls back to
+  // allowed[0] — an arbitrary "first in the list" value with no relation to
+  // the actual item (this is exactly how a correct 32" inseam onscreen in
+  // the title turned into "24 in" in the aspect — allowed[0] just happened
+  // to be 24 for that category). A close numeric match is always more
+  // correct than an arbitrary position in eBay's list.
+  const valNum = parseFloat(ls.replace(/[^\d.]/g, ""));
+  if (!isNaN(valNum)) {
+    let best: string | null = null;
+    let bestDiff = Infinity;
+    for (const v of allowed) {
+      const vNum = parseFloat(v.replace(/[^\d.]/g, ""));
+      if (!isNaN(vNum)) {
+        const diff = Math.abs(vNum - valNum);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          best = v;
+        }
+      }
+    }
+    if (best !== null) return best;
+  }
   return null;
 }
 
@@ -1146,9 +1170,17 @@ export async function publishListing(
     // Candidate padding tokens — item-specific only, in priority order.
     // Each token is only added if it isn't already present in the title.
     const itemType = listing.item_type ? normalizeItemType(String(listing.item_type).trim()) : null;
+    // Size sometimes comes back with a bilingual/secondary label attached
+    // (e.g. "XXL/TTG" off a Canadian-market tag) — only the primary token is
+    // ever useful as a title keyword, and using the whole string breaks the
+    // duplicate check below (title already has "XXL," not "XXL/TTG," so the
+    // full string looked like a new addition instead of a repeat).
+    const coreSize = listing.size
+      ? String(listing.size).trim().split(/[/,]/)[0].trim()
+      : null;
     const padCandidates = [
       listing.condition === "NEW_WITH_TAGS" || listing.condition === "NEW_NO_TAGS" ? "NWT" : null,
-      listing.size ? String(listing.size).trim() : null,
+      coreSize,
       listing.color ? singleValue(listing.color) : null,
       listing.material ? singleValue(listing.material) : null,
       itemType,
@@ -1178,9 +1210,14 @@ export async function publishListing(
       const isTop    = cat.includes("top") || cat.includes("shirt") || cat.includes("sweater");
       const isJacket = cat.includes("jacket") || cat.includes("coat");
 
+      const closureVal = specifics["Closure"] || "";
       const fromSpecifics: (string | null)[] = [
         isPants ? specifics["Leg Style"] || null : null,          // e.g. "Jogger", "Slim", "Straight" — accurate per item
-        isTop || isJacket ? specifics["Closure"] || null : null,  // e.g. "Pullover", "Half Zip", "Button" — accurate per item
+        // "Pullover", "Half Zip", "Full Zip", "Quarter Zip" are genuinely
+        // useful, unambiguous keywords. Bare "Button" alone at the tail of a
+        // title reads as vague filler (and can misread as a decorative
+        // button, not a closure type) — skip it specifically.
+        (isTop || isJacket) && closureVal.toLowerCase() !== "button" ? closureVal || null : null,
         specifics["Fit"] || null,                                  // e.g. "Slim Fit", "Relaxed Fit"
         specifics["Fabric Type"] || null,                          // e.g. "Fleece", "Knit", "Twill"
         specifics["Pattern"] && specifics["Pattern"] !== "Solid" ? specifics["Pattern"] : null,
