@@ -13,8 +13,19 @@ import type { AnalyzeRequestBody, ListingResult } from "@/lib/types";
 // Analysis can take 30-90s with the expanded prompt + web searches. Pro plan supports 300s.
 export const maxDuration = 300;
 
-const ANALYSIS_MODEL = "claude-sonnet-4-6";
-const ROUTER_MODEL = "claude-sonnet-4-6";
+// Model tiers:
+// - ANALYSIS_MODEL: the actual listing generation from photos — brand ID,
+//   condition grading, description writing. This is where quality shows up
+//   in the listing, so it stays on the strongest model.
+// - ROUTER_MODEL: coarse item-profile classification (apparel vs. hard
+//   goods, etc.) before the real analysis runs. This was re-sending every
+//   photo through Sonnet a second time for a decision that doesn't need
+//   full Sonnet-level reasoning — Haiku is the right size for this.
+// - REPAIR_MODEL: text-only follow-up (fixing a too-short/long title). No
+//   photos involved, small output — Haiku handles this fine.
+const ANALYSIS_MODEL = "claude-sonnet-5";
+const ROUTER_MODEL = "claude-haiku-4-5-20251001";
+const REPAIR_MODEL = "claude-haiku-4-5-20251001";
 const MAX_IMAGES = 5; // front, back, tag, detail, one more — sufficient for a complete listing
 
 function toImageBlocks(images: AnalyzeRequestBody["images"]): ImageBlock[] {
@@ -94,7 +105,7 @@ async function repairTitleLength(
 
     try {
       const resp = await client.messages.create({
-        model: ANALYSIS_MODEL,
+        model: REPAIR_MODEL,
         max_tokens: 300,
         messages: [
           {
