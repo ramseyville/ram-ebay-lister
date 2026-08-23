@@ -845,17 +845,22 @@ export default function Home() {
       </p>
 
       {sessionCost.listings > 0 && (() => {
-        // Sonnet 4.6 pricing: $3/M input, $15/M output, $0.30/M cache read
-        const inputCost  = (sessionCost.inputTokens  / 1_000_000) * 3;
-        const outputCost = (sessionCost.outputTokens / 1_000_000) * 15;
-        const cacheCost  = (sessionCost.cacheTokens  / 1_000_000) * 0.30;
+        // Sonnet 5 pricing: $2/M input, $10/M output, $0.20/M cache read.
+        // This is an approximation, not an exact figure — the router and
+        // title-repair calls now run on Haiku 4.5 (cheaper), but token
+        // counts here aren't split by model, so using the Sonnet 5 rate
+        // for everything slightly OVERstates real cost. Safer to
+        // overstate than understate for a cost display.
+        const inputCost  = (sessionCost.inputTokens  / 1_000_000) * 2;
+        const outputCost = (sessionCost.outputTokens / 1_000_000) * 10;
+        const cacheCost  = (sessionCost.cacheTokens  / 1_000_000) * 0.20;
         const total      = inputCost + outputCost + cacheCost;
         const perListing = total / sessionCost.listings;
         return (
           <p className="footnote session-cost">
             💡 Session: <strong>{sessionCost.listings} listing{sessionCost.listings !== 1 ? "s" : ""}</strong> analyzed
             · AI cost <strong>${total.toFixed(3)}</strong> total
-            · <strong>${perListing.toFixed(3)}</strong> per listing
+            · <strong>${perListing.toFixed(3)}</strong> per listing (approx. — actual is somewhat lower)
           </p>
         );
       })()}
