@@ -1175,9 +1175,15 @@ export async function publishListing(
     // ever useful as a title keyword, and using the whole string breaks the
     // duplicate check below (title already has "XXL," not "XXL/TTG," so the
     // full string looked like a new addition instead of a repeat).
-    const coreSize = listing.size
-      ? String(listing.size).trim().split(/[/,]/)[0].trim()
-      : null;
+    // Also exclude non-informative size placeholders (ties, belts, scarves,
+    // etc. often get "One Size" / "No Size" from the AI) — nobody searches
+    // eBay for "no size," it's pure filler with zero SEO value.
+    const NON_INFORMATIVE_SIZES = new Set(["one size", "no size", "os", "n/a", "not applicable", "onesize"]);
+    const rawSize = listing.size ? String(listing.size).trim() : null;
+    const coreSize =
+      rawSize && !NON_INFORMATIVE_SIZES.has(rawSize.toLowerCase())
+        ? rawSize.split(/[/,]/)[0].trim()
+        : null;
     const padCandidates = [
       listing.condition === "NEW_WITH_TAGS" || listing.condition === "NEW_NO_TAGS" ? "NWT" : null,
       coreSize,
