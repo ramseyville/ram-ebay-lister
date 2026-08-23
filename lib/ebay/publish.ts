@@ -926,8 +926,22 @@ export interface AccountSetup {
   locationKey: string;
 }
 
-// The fulfillment policy to use — must match the name in eBay → Account → Business policies.
-const FULFILLMENT_POLICY_NAME = "CALCULATED: USPS GAdv, USPS Priority";
+// The fulfillment policy to use — must match the name in eBay → Account →
+// Business policies. Matching is normalized (case-insensitive, whitespace-
+// collapsed, trailing "(N listings)" suffix ignored) because eBay's Seller
+// Hub display name and the API's stored name don't reliably match
+// character-for-character, and a rigid exact match silently falls back to
+// whatever policy the API happens to list first — which is how this
+// defaulted to the wrong shipping policy in the first place.
+const FULFILLMENT_POLICY_NAME = "Calculated:USPS GAdv, USPS Priority";
+
+function normalizePolicyName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/\s*\(\d+\s*listings?\)\s*$/i, "") // strip trailing "(2679 listings)"
+    .replace(/\s+/g, " "); // collapse whitespace
+}
 
 function pickFirstPolicy(r: EbayResp, listKey: string, idField: string): string {
   if (!r.ok) return "";
@@ -938,8 +952,9 @@ function pickFirstPolicy(r: EbayResp, listKey: string, idField: string): string 
 function pickNamedFulfillmentPolicy(r: EbayResp): string {
   if (!r.ok) return "";
   const list: any[] = r.json?.fulfillmentPolicies || [];
-  // Prefer the exact named policy; fall back to first in list.
-  const match = list.find((p) => (p.name || "").trim() === FULFILLMENT_POLICY_NAME);
+  const target = normalizePolicyName(FULFILLMENT_POLICY_NAME);
+  // Prefer the named policy (normalized match); fall back to first in list.
+  const match = list.find((p) => normalizePolicyName(p.name || "") === target);
   const chosen = match || list[0];
   return chosen ? String(chosen.fulfillmentPolicyId || "") : "";
 }
