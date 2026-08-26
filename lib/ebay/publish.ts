@@ -7,7 +7,7 @@ import {
   EBAY_ACC_BASE,
   EBAY_INV_BASE,
   EBAY_MARKETPLACE_ID,
-  EBAY_TRADING,
+  EBAY_MEDIA_BASE,
 } from "./config";
 import {
   suggestLeafCategory,
@@ -884,37 +884,58 @@ export async function retireSku(
   return { success: true };
 }
 
+// eBay is decommissioning UploadSiteHostedPictures on Sept 30, 2026 — this
+// now uses the Media API instead: createImageFromFile (multipart upload,
+// returns an image_id via the Location header) followed by getImage (to
+// retrieve the actual EPS imageUrl needed for listings). Two calls instead
+// of one, but same OAuth scope (sell.inventory) already held — no reconnect
+// needed.
 async function uploadPhoto(
   accessToken: string,
   base64: string,
   mediaType: string,
   name: string
 ): Promise<string | null> {
-  const xml = `<?xml version="1.0" encoding="utf-8"?>
-<UploadSiteHostedPicturesRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <PictureName>${name.slice(0, 50)}</PictureName>
-  <PictureUploadPolicy>ClearAndNew</PictureUploadPolicy>
-</UploadSiteHostedPicturesRequest>`;
-
   const data = base64.includes(",") ? base64.split(",")[1] : base64;
   const bytes = Buffer.from(data, "base64");
   const form = new FormData();
-  form.append("XML Payload", new Blob([xml], { type: "text/xml;charset=utf-8" }), "payload.xml");
   form.append("image", new Blob([new Uint8Array(bytes)], { type: mediaType }), name);
 
-  const resp = await fetch(EBAY_TRADING, {
+  const createResp = await fetch(`${EBAY_MEDIA_BASE}/image/create_image_from_file`, {
     method: "POST",
     headers: {
-      "X-EBAY-API-SITEID": "0",
-      "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
-      "X-EBAY-API-CALL-NAME": "UploadSiteHostedPictures",
-      "X-EBAY-API-IAF-TOKEN": accessToken,
+      Authorization: `Bearer ${accessToken}`,
     },
     body: form,
   });
-  const text = await resp.text();
-  const m = text.match(/<FullURL>([^<]+)<\/FullURL>/);
-  return m ? m[1] : null;
+
+  if (createResp.status !== 201) {
+    console.error(
+      `[uploadPhoto] createImageFromFile failed (${createResp.status}): ${await createResp.text().catch(() => "")}`
+    );
+    return null;
+  }
+
+  // The Location header is the full getImage URI, e.g.
+  // https://apim.ebay.com/commerce/media/v1_beta/image/{image_id}
+  const location = createResp.headers.get("Location") || createResp.headers.get("location");
+  if (!location) {
+    console.error("[uploadPhoto] createImageFromFile succeeded but no Location header returned");
+    return null;
+  }
+
+  const getResp = await fetch(location, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  if (!getResp.ok) {
+    console.error(`[uploadPhoto] getImage failed (${getResp.status}) for ${location}`);
+    return null;
+  }
+  const imageData = await getResp.json().catch(() => null);
+  return imageData?.imageUrl || null;
 }
 
 // ── Policies & location ──────────────────────────────────────────────────────
