@@ -16,6 +16,10 @@ export const EBAY_ACC_BASE = "https://api.ebay.com/sell/account/v1";
 export const EBAY_META_BASE = "https://api.ebay.com/sell/metadata/v1";
 export const EBAY_TAX_BASE = "https://api.ebay.com/commerce/taxonomy/v1";
 export const EBAY_TRADING = "https://api.ebay.com/ws/api.dll";
+// eBay is decommissioning UploadSiteHostedPictures (Trading API) on Sept 30,
+// 2026 — replaced by the Media API's createImageFromFile/getImage. Same
+// OAuth scope (sell.inventory) already covers this, so no reconnect needed.
+export const EBAY_MEDIA_BASE = "https://apim.ebay.com/commerce/media/v1_beta";
 export const EBAY_MARKETPLACE_ID = "EBAY_US";
 export const EBAY_CATEGORY_TREE_ID = "0";
 
