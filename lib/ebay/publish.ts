@@ -840,34 +840,74 @@ export async function updateOfferQuantity(
 // by the caller via publishListing), then retire the old one here —
 // withdraw its offer (ends the live listing) and delete the inventory item
 // so it doesn't linger as an orphaned, unpublished record.
-export async function retireSku(
+// ── SKU-change primitives ───────────────────────────────────────────────────
+//
+// eBay's duplicate-listing detection compares a new offer against your
+// currently ACTIVE listings — so publishing a new SKU with the same title/
+// photos/description while the old SKU is still live gets flagged as a
+// duplicate of itself (error 25002). The fix is ordering: withdraw the old
+// listing FIRST (which just unpublishes it — the offer and inventory item
+// still exist), THEN publish the new one. If the new publish fails, the old
+// offer can be republished as-is to restore the original listing rather
+// than leaving the seller with nothing live.
+
+export async function withdrawOffer(
   accessToken: string,
   sku: string
-): Promise<{ success: boolean; error?: string }> {
-  if (!sku) return { success: false, error: "No SKU provided." };
-
+): Promise<{ success: boolean; offerId?: string; wasLive: boolean; error?: string }> {
   const lookup = await ebayRequest(
     accessToken,
     "GET",
     `${EBAY_INV_BASE}/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${EBAY_MARKETPLACE_ID}`
   );
   const offer = lookup.ok ? (lookup.json?.offers || [])[0] : null;
-
-  if (offer?.offerId && (offer.status === "PUBLISHED" || offer.listing?.listingId)) {
-    const withdraw = await ebayRequest(
-      accessToken,
-      "POST",
-      `${EBAY_INV_BASE}/offer/${offer.offerId}/withdraw`,
-      { extraHeaders: CL }
-    );
-    if (!withdraw.ok) {
-      return {
-        success: false,
-        error: `Old SKU "${sku}" is still live on eBay — withdraw failed (${withdraw.status}): ${withdraw.text.slice(0, 200)}`,
-      };
-    }
+  if (!offer?.offerId) {
+    // Nothing to withdraw — treat as success so the caller can proceed.
+    return { success: true, wasLive: false };
   }
 
+  const wasLive = offer.status === "PUBLISHED" || Boolean(offer.listing?.listingId);
+  if (!wasLive) {
+    return { success: true, offerId: offer.offerId, wasLive: false };
+  }
+
+  const withdraw = await ebayRequest(
+    accessToken,
+    "POST",
+    `${EBAY_INV_BASE}/offer/${offer.offerId}/withdraw`,
+    { extraHeaders: CL }
+  );
+  if (!withdraw.ok) {
+    return {
+      success: false,
+      offerId: offer.offerId,
+      wasLive: true,
+      error: `Could not withdraw SKU "${sku}" (${withdraw.status}): ${withdraw.text.slice(0, 200)}`,
+    };
+  }
+  return { success: true, offerId: offer.offerId, wasLive: true };
+}
+
+export async function republishOffer(
+  accessToken: string,
+  offerId: string
+): Promise<{ success: boolean; error?: string }> {
+  const pub = await ebayRequest(accessToken, "POST", `${EBAY_INV_BASE}/offer/${offerId}/publish`, {
+    extraHeaders: CL,
+  });
+  if (!pub.ok) {
+    return {
+      success: false,
+      error: `Republish failed (${pub.status}): ${pub.text.slice(0, 200)}`,
+    };
+  }
+  return { success: true };
+}
+
+export async function deleteInventoryItem(
+  accessToken: string,
+  sku: string
+): Promise<{ success: boolean; error?: string }> {
   const del = await ebayRequest(
     accessToken,
     "DELETE",
@@ -877,11 +917,22 @@ export async function retireSku(
   if (!del.ok && del.status !== 404) {
     return {
       success: false,
-      error: `Old listing was ended, but its inventory record (SKU "${sku}") could not be deleted (${del.status}). Not urgent — it's inactive, just no longer tidy.`,
+      error: `Listing was ended, but its inventory record (SKU "${sku}") could not be deleted (${del.status}). Not urgent — it's inactive, just no longer tidy.`,
     };
   }
-
   return { success: true };
+}
+
+// Convenience wrapper for the simple case (no rollback needed) — still used
+// wherever a SKU just needs to be fully retired in one step.
+export async function retireSku(
+  accessToken: string,
+  sku: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!sku) return { success: false, error: "No SKU provided." };
+  const withdrawn = await withdrawOffer(accessToken, sku);
+  if (!withdrawn.success) return { success: false, error: withdrawn.error };
+  return deleteInventoryItem(accessToken, sku);
 }
 
 // eBay is decommissioning UploadSiteHostedPictures on Sept 30, 2026 — this
