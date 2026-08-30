@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { EBAY_COOKIE, accessTokenFromCookie } from "@/lib/ebay/session";
 import { guardApiRequest } from "@/lib/api-guard";
-import { fetchAccountSetup, publishListing, retireSku } from "@/lib/ebay/publish";
+import {
+  fetchAccountSetup,
+  publishListing,
+  withdrawOffer,
+  republishOffer,
+  deleteInventoryItem,
+} from "@/lib/ebay/publish";
 import type { PublishInput } from "@/lib/ebay/publish";
 
 // Same shape as /api/ebay/publish, plus the SKU being retired.
@@ -55,32 +61,61 @@ export async function POST(req: NextRequest) {
   try {
     const setup = await fetchAccountSetup(accessToken);
 
-    // 1. Publish a fresh listing under the new SKU first — if this fails,
-    //    the old listing is untouched and nothing is lost.
+    // 1. Withdraw the old listing FIRST. eBay's duplicate-listing detection
+    //    compares a new offer against currently ACTIVE listings — publishing
+    //    the new SKU while the old one is still live gets rejected as a
+    //    duplicate of itself (error 25002). Withdrawing just unpublishes it;
+    //    the offer and inventory item still exist, so it can be restored if
+    //    step 2 fails.
+    const withdrawn = await withdrawOffer(accessToken, oldSku);
+    if (!withdrawn.success) {
+      return NextResponse.json(
+        { success: false, error: `Could not prep old SKU "${oldSku}" for the swap: ${withdrawn.error}` },
+        { status: 502 }
+      );
+    }
+
+    // 2. Publish the new SKU.
     const published = await publishListing(accessToken, setup, {
       sku: newSku,
       listing: body.listing,
       images: body.images,
     });
+
     if (!published.success) {
+      // Roll back — restore the old listing rather than leaving the seller
+      // with nothing live.
+      if (withdrawn.wasLive && withdrawn.offerId) {
+        const restored = await republishOffer(accessToken, withdrawn.offerId);
+        if (!restored.success) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Publish under new SKU "${newSku}" failed (${published.error}), AND restoring the old listing also failed (${restored.error}). The old SKU "${oldSku}" may currently be OFFLINE — check Seller Hub and republish it manually if needed.`,
+            },
+            { status: 502 }
+          );
+        }
+      }
       return NextResponse.json(
-        { success: false, error: `Could not publish under new SKU "${newSku}": ${published.error}` },
+        {
+          success: false,
+          error: `Could not publish under new SKU "${newSku}": ${published.error}. The old listing under "${oldSku}" was restored — nothing changed.`,
+        },
         { status: 502 }
       );
     }
 
-    // 2. New listing is live — now retire the old one.
-    const retired = await retireSku(accessToken, oldSku);
-    if (!retired.success) {
-      // New listing is live either way; just flag that the old one needs
-      // manual cleanup rather than losing track of the new listingId.
+    // 3. New listing is live — clean up the old inventory record.
+    const deleted = await deleteInventoryItem(accessToken, oldSku);
+    if (!deleted.success) {
       return NextResponse.json(
         {
           success: true,
           sku: newSku,
           listingId: published.listingId,
           offerId: published.offerId,
-          warning: `New listing is live under "${newSku}" (item #${published.listingId}), but the old SKU "${oldSku}" could not be fully retired: ${retired.error}. You may want to end it manually in Seller Hub.`,
+          warning: `New listing is live under "${newSku}" (item #${published.listingId}), but the old SKU "${oldSku}"'s inventory record couldn't be deleted: ${deleted.error}. Not urgent — it's inactive.`,
         },
         { status: 200 }
       );
