@@ -27,7 +27,7 @@ const CATEGORY_MAP: Record<string, string> = {
   mens_top: "57991", mens_pants: "57989", mens_coat: "57988",
   mens_sweater: "11484", mens_jeans: "11483", mens_clothing: "1059",
   mens_shoes: "93427", handbag: "169291", wallet: "2996", jewelry: "281",
-  scarf: "45238", belt: "2996", sunglasses: "79720", hat: "52382",
+  scarf: "45238", belt: "2996", sunglasses: "79720", hat: "52382", mens_tie: "15662",
   accessory: "4250", doll: "22733", collectible: "1463", collector_plate: "1467",
   toy: "2550", home_decor: "10033", book: "267", knife: "7313",
   sporting_goods: "159044", electronics: "293", camera: "625", audio: "293",
