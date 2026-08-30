@@ -23,6 +23,7 @@ const WEIGHTS: Record<string, { oz: number; dims: ShippingDimensions; note: stri
   womens_shoes:   { oz: 28, dims: SMALL_BOX,   note: "Shoes - small box 12x12x3" },
   handbag:        { oz: 20, dims: SMALL_BOX,   note: "Handbag - small box 12x12x3" },
   wallet:         { oz:  6, dims: POLY_MAILER, note: "Wallet - poly mailer 12x12x1" },
+  mens_tie:       { oz:  3, dims: POLY_MAILER, note: "Tie - poly mailer 12x12x1" },
   hat:            { oz:  6, dims: POLY_MAILER, note: "Hat - poly mailer 12x12x1" },
   hard_goods:     { oz: 24, dims: SMALL_BOX,   note: "Hard goods - small box 12x12x3" },
   mens_clothing:  { oz: 16, dims: POLY_MAILER, note: "Clothing - poly mailer 12x12x1" },
