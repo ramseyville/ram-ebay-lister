@@ -1863,8 +1863,17 @@ async function publishOfferWithRecovery(
   // check. Rather than guess at another value, just drop the flagged
   // aspect(s) entirely and retry — up to 3 rounds, since eBay may flag a
   // different aspect on each retry.
+  //
+  // EXCEPTION: never drop "Size" this way. Dropping an optional/defaultable
+  // aspect (Size Type, Fit, etc.) is a safe recovery — the listing still
+  // publishes without it. But Size is essentially always mandatory for
+  // clothing, so dropping it doesn't recover anything; it just trades a
+  // (potentially informative) "value not supported" error for a strictly
+  // worse, less specific "field is missing" error. Better to surface the
+  // real rejection than mask it with a misleading one.
+  const NEVER_STRIP = new Set(["Size"]);
   for (let round = 0; round < 3 && eids.includes(25129); round++) {
-    const unsupported = extractUnsupportedAspects(r);
+    const unsupported = extractUnsupportedAspects(r).filter((n) => !NEVER_STRIP.has(n));
     if (!unsupported.length) break;
     let changed = false;
     for (const name of unsupported) {
