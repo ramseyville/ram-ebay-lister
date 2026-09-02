@@ -131,7 +131,17 @@ const TOPS_CATEGORIES = new Set([
   "mens_top", "womens_top", "mens_sweater", "womens_sweater", "mens_clothing", "womens_clothing",
 ]);
 
-// Aspects that should ONLY be populated as defaults when the item is in a
+// Categories where eBay's Aug/Sept 2026 standardized-size enforcement
+// applies (Apparel and Footwear) — same set as the Size Type gate below,
+// pulled out as its own constant since it's also used to decide whether a
+// taxonomy-fetch failure should hard-block a publish (see publishListing).
+const SIZE_ENFORCED_CATEGORIES = new Set([
+  "mens_top", "mens_pants", "mens_shorts", "mens_jacket", "mens_coat",
+  "mens_sweater", "mens_jeans", "mens_shoes", "mens_clothing",
+  "womens_top", "womens_pants", "womens_jacket", "womens_coat",
+  "womens_sweater", "womens_jeans", "womens_dress", "womens_skirt",
+  "womens_shoes", "womens_clothing",
+]);
 // relevant category. Prevents "Hood: No Hood" on dress shirts, "Rise: Mid Rise"
 // on jackets, "Leg Style: Straight" on tops, etc.
 // Map of aspect name → set of category keys where the default is appropriate.
@@ -162,13 +172,7 @@ const ASPECT_CATEGORY_GATES: Record<string, Set<string>> = {
   // jewelry don't have a size type at all, and eBay's own taxonomy has been
   // tightening what it accepts here per-category (errorId 25129: "no longer
   // support custom values for Size Type"). Gate it to real clothing only.
-  "Size Type": new Set([
-    "mens_top", "mens_pants", "mens_shorts", "mens_jacket", "mens_coat",
-    "mens_sweater", "mens_jeans", "mens_shoes", "mens_clothing",
-    "womens_top", "womens_pants", "womens_jacket", "womens_coat",
-    "womens_sweater", "womens_jeans", "womens_dress", "womens_skirt",
-    "womens_shoes", "womens_clothing",
-  ]),
+  "Size Type": SIZE_ENFORCED_CATEGORIES,
 };
 
 const ASPECT_DEFAULTS: Record<string, string> = {
@@ -1170,17 +1174,43 @@ export async function publishListing(
   const aspects = buildAspects(listing, catKey);
   // Ask eBay (in parallel) for the leaf category's REQUIRED specifics and its
   // accepted condition ids, then make both valid before creating the item.
-  // Non-fatal: the recovery loops below remain as a backup if eBay is slow.
+  //
+  // eBay began enforcing standardized Size values for Apparel/Footwear on
+  // Aug 31 2026 (US: Sept 22 2026) — a listing with a size that isn't one of
+  // eBay's real taxonomy values for that category gets blocked outright, or
+  // (for existing listings) silently hidden from search. So this can no
+  // longer be "best effort" for size-relevant categories: if the taxonomy
+  // fetch fails, retry once (most failures are transient network blips), and
+  // if it still fails, REFUSE to publish rather than risk an unchecked size
+  // going out. Non-size categories (collectibles, hard goods, etc.) still
+  // proceed on a metadata failure — there's no size-enforcement risk there.
   let acceptedConds = new Set<number>();
-  try {
-    const [meta, conds] = await Promise.all([
-      categoryAspects(catId), // required aspects + valid values  → fixes 25002
-      acceptedConditionIds(catId), // accepted condition ids       → fixes 25021
-    ]);
-    if (meta.length) reconcileAspects(aspects, meta, listing, catKey);
-    acceptedConds = conds;
-  } catch {
-    /* taxonomy/metadata unavailable — proceed with best-effort values */
+  let metaOk = false;
+  for (let attempt = 0; attempt < 2 && !metaOk; attempt++) {
+    try {
+      const [meta, conds] = await Promise.all([
+        categoryAspects(catId), // required aspects + valid values  → fixes 25002
+        acceptedConditionIds(catId), // accepted condition ids       → fixes 25021
+      ]);
+      if (meta.length) {
+        reconcileAspects(aspects, meta, listing, catKey);
+        metaOk = true;
+      }
+      acceptedConds = conds;
+    } catch {
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+  if (!metaOk && SIZE_ENFORCED_CATEGORIES.has(catKey)) {
+    return {
+      success: false,
+      sku,
+      error:
+        "Could not verify this item's Size against eBay's current taxonomy after two attempts " +
+        "(eBay's metadata service may be briefly unavailable). Publishing was stopped rather than " +
+        "risk submitting an unverified size — eBay now blocks or hides apparel/footwear listings " +
+        "with non-standard size values. Please try posting again in a moment.",
+    };
   }
   const condCandidates = conditionCandidates(listing.condition, acceptedConds);
   const condition = condCandidates[0] || "USED_EXCELLENT";
