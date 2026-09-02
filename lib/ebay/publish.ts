@@ -175,6 +175,34 @@ const ASPECT_CATEGORY_GATES: Record<string, Set<string>> = {
   "Size Type": SIZE_ENFORCED_CATEGORIES,
 };
 
+// Men's 2XL+ (and women's plus/petite) sizing needs a different Size Type
+// than standard — submitting "Regular" for a 3XL gets rejected as an
+// invalid combination for that category, not because eBay's platform is
+// broken (confirmed directly: a manually-created eBay listing for the same
+// 3XL Psycho Bunny item used "Big & Tall" successfully). The flat "Regular"
+// default was simply wrong for extended sizes.
+function inferSizeType(rawSize: string, catKey: string): string {
+  const size = (rawSize || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!size) return "Regular";
+  const isWomens = catKey.startsWith("womens_");
+
+  if (isWomens) {
+    if (/^[1-6]X$/.test(size) || /^(1[4-9]|[2-9]\d)W?$/.test(size)) return "Plus";
+    if (/^P/.test(size) || /P$/.test(size)) return "Petite";
+    return "Regular";
+  }
+
+  // Men's: XXL+ / 2X+ is Big & Tall. Also catch pants by waist size (44+).
+  if (/^X{2,}L?$/.test(size) || /^[2-6]XL?$/.test(size)) return "Big & Tall";
+  const isPantsCat =
+    PANTS_CATEGORIES.has(catKey) || catKey === "mens_pants" || catKey === "mens_jeans" || catKey === "mens_shorts";
+  if (isPantsCat) {
+    const waistMatch = size.match(/^(\d{2})/);
+    if (waistMatch && parseInt(waistMatch[1], 10) >= 44) return "Big & Tall";
+  }
+  return "Regular";
+}
+
 const ASPECT_DEFAULTS: Record<string, string> = {
   "Skirt Length": "Knee-Length", "Dress Length": "Knee-Length", Rise: "Mid Rise",
   "Leg Style": "Straight", Closure: "Pull-On", "Shoe Width": "Medium",
@@ -623,24 +651,18 @@ function reconcileAspects(
       // Must be one of eBay's allowed values, or the publish 25002-fails /
       // a nonsense free-text value gets forced into a dropdown.
       const useDefault = !gate || gate.has(catKey); // only apply default if not gated out
+      const defaultValue =
+        a.name === "Size Type" ? inferSizeType(String(listing.size || ""), catKey) : ASPECT_DEFAULTS[a.name] || "";
       const canonical =
         matchAllowed(current || "", a.values) ||
-        (useDefault ? matchAllowed(ASPECT_DEFAULTS[a.name] || "", a.values) : "") ||
+        (useDefault ? matchAllowed(defaultValue, a.values) : "") ||
         (a.name === "Department" ? pickDepartment(a.values, listing, catKey) : "") ||
         (mustFill ? a.values[0] : "") ||
-        // eBay's own metadata can say a field has ZERO valid values while
-        // eBay's live publish-time validator still demands one — seen live
-        // during their Aug/Sept 2026 size enforcement rollout, and eBay's
-        // `required` flag itself isn't reliable in this state either (it
-        // can report false while publish still rejects a missing value).
-        // So this doesn't gate on mustFill: if there's truly nothing to
-        // validate against, submit the known-standard default outright
-        // rather than trust a required flag that may itself be wrong.
-        // Worst case it's an unnecessary value eBay ignores; best case it's
-        // exactly what their broken metadata forgot to list. The 25129
-        // recovery above still catches it if eBay's publish check rejects
-        // this value too.
-        (!a.values.length ? ASPECT_DEFAULTS[a.name] || "" : "") ||
+        // If eBay's metadata lists zero valid values for a field it still
+        // enforces at publish time, submit the inferred default directly
+        // rather than leave it unset — a value eBay's real validator might
+        // still accept beats a guaranteed "missing field" error.
+        (!a.values.length ? defaultValue : "") ||
         "";
       if (canonical) {
         aspects[a.name] = [canonical];
@@ -649,7 +671,9 @@ function reconcileAspects(
       }
     } else if (mustFill && !current) {
       const useDefault = !gate || gate.has(catKey);
-      const v = freeTextDefault(a.name, listing) || (useDefault ? ASPECT_DEFAULTS[a.name] : "") || a.values[0] || "";
+      const defaultValue =
+        a.name === "Size Type" ? inferSizeType(String(listing.size || ""), catKey) : ASPECT_DEFAULTS[a.name];
+      const v = freeTextDefault(a.name, listing) || (useDefault ? defaultValue : "") || a.values[0] || "";
       const clipped = clipAspectValue(v);
       if (clipped) aspects[a.name] = [clipped];
     }
@@ -1420,16 +1444,13 @@ export async function publishListing(
         "with non-standard size values. Please try posting again in a moment.",
     };
   }
-  // Belt-and-suspenders for Size Type specifically: eBay's metadata for this
-  // field has been observed mid-rollout either (a) present but with an
-  // empty values list, or (b) absent from the response entirely — in both
-  // cases their publish-time validator still demands SOMETHING be there.
-  // reconcileAspects already handles case (a); this catches case (b), which
-  // depends on eBay having included "Size Type" in the metadata response at
-  // all, not on anything in our own logic being wrong.
+  // Guarantee Size Type is set for size-enforced categories even if it's
+  // absent from eBay's metadata response entirely (reconcileAspects only
+  // handles it when eBay's metadata includes the field, even with an empty
+  // values list). Uses the same size-aware inference as reconcileAspects —
+  // NOT a flat "Regular," which is wrong for XXL+ / extended sizes.
   if (SIZE_ENFORCED_CATEGORIES.has(catKey) && !aspects["Size Type"]?.length) {
-    const fallback = ASPECT_DEFAULTS["Size Type"];
-    if (fallback) aspects["Size Type"] = [fallback];
+    aspects["Size Type"] = [inferSizeType(String(listing.size || ""), catKey)];
   }
   const condCandidates = conditionCandidates(listing.condition, acceptedConds);
   const condition = condCandidates[0] || "USED_EXCELLENT";
