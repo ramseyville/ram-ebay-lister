@@ -664,6 +664,29 @@ function extractExistingOfferId(r: EbayResp): string | null {
   return null;
 }
 
+// eBay's Aug/Sept 2026 standardization enforcement is actively rolling out —
+// an aspect that was accepted last week can start getting rejected outright
+// this week for a given category (errorId 25129: "no longer support custom
+// values for X"). Rather than hardcode "Size Type" specifically, pull the
+// actual aspect name from eBay's own error response — general enough to
+// keep working if eBay tightens a different aspect next.
+function extractUnsupportedAspects(r: EbayResp): string[] {
+  const names: string[] = [];
+  for (const err of r.json?.errors || []) {
+    if (Number(err.errorId) !== 25129) continue;
+    for (const p of err.parameters || []) {
+      const v = String(p.value || "").trim();
+      if (v) names.push(v);
+    }
+    // Fall back to parsing the message if parameters didn't carry it.
+    if (!err.parameters?.length) {
+      const m = /for ([A-Za-z][A-Za-z0-9 &/-]*?)\./.exec(err.message || "");
+      if (m) names.push(m[1].trim());
+    }
+  }
+  return Array.from(new Set(names));
+}
+
 function extractMissingAspects(r: EbayResp): string[] {
   const missing: string[] = [];
   for (const err of r.json?.errors || []) {
@@ -1758,6 +1781,31 @@ async function publishOfferWithRecovery(
       eids = errorIds(r);
       if (!eids.includes(25021) && !eids.includes(25059)) break;
     }
+  }
+
+  // Recovery: eBay rejects an aspect's value as "no longer supporting custom
+  // values" (25129) — this can happen even after our own metadata fetch
+  // said the value was fine, since eBay's per-category standardization
+  // rollout can tighten rules between our fetch and their publish-time
+  // check. Rather than guess at another value, just drop the flagged
+  // aspect(s) entirely and retry — up to 3 rounds, since eBay may flag a
+  // different aspect on each retry.
+  for (let round = 0; round < 3 && eids.includes(25129); round++) {
+    const unsupported = extractUnsupportedAspects(r);
+    if (!unsupported.length) break;
+    let changed = false;
+    for (const name of unsupported) {
+      if (ctx.aspects[name]) {
+        delete ctx.aspects[name];
+        changed = true;
+      }
+    }
+    if (!changed) break;
+    ctx.inventoryItem.product.aspects = ctx.aspects;
+    await putInventory();
+    r = await doPublish();
+    if (r.ok) return { success: true, sku, offerId, listingId: r.json?.listingId || "" };
+    eids = errorIds(r);
   }
 
   // Recovery: non-leaf category (25005) → try fallbacks via offer update.
