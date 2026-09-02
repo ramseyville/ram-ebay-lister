@@ -628,17 +628,19 @@ function reconcileAspects(
         (useDefault ? matchAllowed(ASPECT_DEFAULTS[a.name] || "", a.values) : "") ||
         (a.name === "Department" ? pickDepartment(a.values, listing, catKey) : "") ||
         (mustFill ? a.values[0] : "") ||
-        // eBay's own metadata can say a field is required while returning
-        // ZERO valid values for it — an internal inconsistency, not
-        // something we invented (seen live during their Aug/Sept 2026 size
-        // enforcement rollout). Leaving the field unset in that case just
-        // trades one publish error ("value not supported") for a worse one
-        // ("required field missing"). Submit the known-standard default
-        // directly as a last resort — eBay's real publish-time validator
-        // may still accept it even when the metadata endpoint's list is
-        // empty or stale mid-rollout. The 25129 recovery above already
-        // exists for the case where even this gets rejected.
-        (mustFill && !a.values.length ? ASPECT_DEFAULTS[a.name] || "" : "") ||
+        // eBay's own metadata can say a field has ZERO valid values while
+        // eBay's live publish-time validator still demands one — seen live
+        // during their Aug/Sept 2026 size enforcement rollout, and eBay's
+        // `required` flag itself isn't reliable in this state either (it
+        // can report false while publish still rejects a missing value).
+        // So this doesn't gate on mustFill: if there's truly nothing to
+        // validate against, submit the known-standard default outright
+        // rather than trust a required flag that may itself be wrong.
+        // Worst case it's an unnecessary value eBay ignores; best case it's
+        // exactly what their broken metadata forgot to list. The 25129
+        // recovery above still catches it if eBay's publish check rejects
+        // this value too.
+        (!a.values.length ? ASPECT_DEFAULTS[a.name] || "" : "") ||
         "";
       if (canonical) {
         aspects[a.name] = [canonical];
@@ -1417,6 +1419,17 @@ export async function publishListing(
         "risk submitting an unverified size — eBay now blocks or hides apparel/footwear listings " +
         "with non-standard size values. Please try posting again in a moment.",
     };
+  }
+  // Belt-and-suspenders for Size Type specifically: eBay's metadata for this
+  // field has been observed mid-rollout either (a) present but with an
+  // empty values list, or (b) absent from the response entirely — in both
+  // cases their publish-time validator still demands SOMETHING be there.
+  // reconcileAspects already handles case (a); this catches case (b), which
+  // depends on eBay having included "Size Type" in the metadata response at
+  // all, not on anything in our own logic being wrong.
+  if (SIZE_ENFORCED_CATEGORIES.has(catKey) && !aspects["Size Type"]?.length) {
+    const fallback = ASPECT_DEFAULTS["Size Type"];
+    if (fallback) aspects["Size Type"] = [fallback];
   }
   const condCandidates = conditionCandidates(listing.condition, acceptedConds);
   const condition = condCandidates[0] || "USED_EXCELLENT";
