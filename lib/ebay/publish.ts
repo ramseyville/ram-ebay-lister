@@ -157,6 +157,18 @@ const ASPECT_CATEGORY_GATES: Record<string, Set<string>> = {
   "Bag Closure":  new Set(["handbag", "wallet"]),
   "Strap Type":   new Set(["handbag"]),
   "Adjustable":   new Set(["handbag", "belt", "hat"]),
+  // Size Type ("Regular," "Big & Tall," "Petite," etc.) only makes sense for
+  // genuinely graded clothing — ties, belts, scarves, hats, wallets, and
+  // jewelry don't have a size type at all, and eBay's own taxonomy has been
+  // tightening what it accepts here per-category (errorId 25129: "no longer
+  // support custom values for Size Type"). Gate it to real clothing only.
+  "Size Type": new Set([
+    "mens_top", "mens_pants", "mens_shorts", "mens_jacket", "mens_coat",
+    "mens_sweater", "mens_jeans", "mens_shoes", "mens_clothing",
+    "womens_top", "womens_pants", "womens_jacket", "womens_coat",
+    "womens_sweater", "womens_jeans", "womens_dress", "womens_skirt",
+    "womens_shoes", "womens_clothing",
+  ]),
 };
 
 const ASPECT_DEFAULTS: Record<string, string> = {
