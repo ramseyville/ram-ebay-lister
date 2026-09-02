@@ -77,8 +77,14 @@ export default function Home() {
   const [ebayConnected, setEbayConnected] = useState(false);
   const [lastSaved, setLastSaved] = useState<number | null>(null);
   const [draftMeta, setDraftMeta] = useState<ReturnType<typeof hasDraft>>(null);
-  // Session cost tracker — Sonnet 4.6: $3/M input, $15/M output, $0.30/M cache read
+  // Session cost tracker — Sonnet 5: $2/M input, $10/M output, $0.20/M cache read
   const [sessionCost, setSessionCost] = useState({ inputTokens: 0, outputTokens: 0, cacheTokens: 0, listings: 0 });
+  const [sizeAuditStatus, setSizeAuditStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [sizeAuditResults, setSizeAuditResults] = useState<
+    { sku: string; title: string; listingId?: string; currentSize: string | null; suggestedValue?: string | null; status: string }[]
+  >([]);
+  const [sizeAuditScanned, setSizeAuditScanned] = useState(0);
+  const [sizeAuditError, setSizeAuditError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const photoMap = useMemo(() => {
@@ -556,6 +562,31 @@ export default function Home() {
     [photoMap]
   );
 
+  const runSizeAudit = useCallback(async () => {
+    setSizeAuditStatus("running");
+    setSizeAuditError("");
+    try {
+      const res = await apiPost("/api/ebay/audit-sizes", {});
+      const data = (await readJson(res)) as {
+        success: boolean;
+        scanned?: number;
+        atRisk?: typeof sizeAuditResults;
+        error?: string;
+      };
+      if (data.success) {
+        setSizeAuditResults(data.atRisk || []);
+        setSizeAuditScanned(data.scanned || 0);
+        setSizeAuditStatus("done");
+      } else {
+        setSizeAuditStatus("error");
+        setSizeAuditError(data.error || "Scan failed.");
+      }
+    } catch (e) {
+      setSizeAuditStatus("error");
+      setSizeAuditError((e as Error).message);
+    }
+  }, []);
+
   const updateLiveQuantity = useCallback(
     async (
       groupId: string,
@@ -864,6 +895,71 @@ export default function Home() {
           </p>
         );
       })()}
+      {ebayConnected && (
+        <div className="footnote size-audit">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={sizeAuditStatus === "running"}
+            title="Read-only scan — checks every live listing's Size against eBay's current taxonomy for its category. Nothing is changed."
+            onClick={runSizeAudit}
+          >
+            {sizeAuditStatus === "running" ? (
+              <>
+                <span className="spinner" aria-hidden="true" /> Scanning your active listings…
+              </>
+            ) : (
+              "🔍 Audit active listing sizes (eBay size enforcement)"
+            )}
+          </button>
+          {sizeAuditStatus === "error" && (
+            <p className="post-result err" style={{ marginTop: "0.5rem" }}>
+              ⚠️ {sizeAuditError}
+            </p>
+          )}
+          {sizeAuditStatus === "done" && (
+            <div style={{ marginTop: "0.5rem" }}>
+              {sizeAuditResults.length === 0 ? (
+                <p className="post-result ok">
+                  ✅ Scanned {sizeAuditScanned} listing{sizeAuditScanned !== 1 ? "s" : ""} — no size issues found.
+                </p>
+              ) : (
+                <>
+                  <p className="post-result err">
+                    ⚠️ {sizeAuditResults.length} of {sizeAuditScanned} listings need attention:
+                  </p>
+                  <ul style={{ fontSize: "0.85rem", paddingLeft: "1.2rem" }}>
+                    {sizeAuditResults.map((r) => (
+                      <li key={r.sku} style={{ marginBottom: "0.35rem" }}>
+                        <strong>{r.sku}</strong> — {r.title}
+                        <br />
+                        Current size: {r.currentSize ?? "(none set)"}
+                        {r.suggestedValue ? (
+                          <> — eBay's likely match: <strong>{r.suggestedValue}</strong></>
+                        ) : (
+                          <> — no close match found, needs a manual look</>
+                        )}
+                        {r.listingId && (
+                          <>
+                            {" "}·{" "}
+                            <a
+                              href={`https://www.ebay.com/itm/${r.listingId}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              View listing
+                            </a>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </main>
   );
 }
