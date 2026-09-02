@@ -94,7 +94,15 @@ const aspectCache = new Map<string, AspectMeta[]>();
 export async function categoryAspects(categoryId: string): Promise<AspectMeta[]> {
   if (!categoryId) return [];
   const cached = aspectCache.get(categoryId);
-  if (cached) return cached;
+  // Only trust a cached result if it actually has data. An empty array from
+  // a prior transient failure or an incomplete eBay response is NOT the
+  // same as "we checked and this category genuinely has no aspects" — but
+  // `if (cached)` treated them identically, since [] is truthy in JS. That
+  // silently poisoned every subsequent listing in the same category for
+  // the life of the warm server instance, no matter what else got fixed
+  // downstream (retry logic never helped either, since a cache hit never
+  // touches the network at all).
+  if (cached && cached.length) return cached;
   try {
     const data = await taxGet(
       `get_item_aspects_for_category?category_id=${encodeURIComponent(categoryId)}`
@@ -113,7 +121,11 @@ export async function categoryAspects(categoryId: string): Promise<AspectMeta[]>
           .filter(Boolean),
       });
     }
-    aspectCache.set(categoryId, out);
+    // Only cache non-empty results — a genuinely empty response (rare, but
+    // possible for some category) gets re-checked next time rather than
+    // locked in, since we can't tell "truly no aspects" apart from "eBay
+    // hiccuped" from the response alone.
+    if (out.length) aspectCache.set(categoryId, out);
     return out;
   } catch {
     return [];
