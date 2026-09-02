@@ -233,7 +233,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation:
   "brand": "Brand name as printed on tag",
   "item_type": "Specific item type (e.g. Quarter-Zip Pullover, Camp Shirt, Chino Shorts)",
   "category": "mens_top|mens_pants|mens_shorts|mens_jacket|mens_coat|mens_sweater|mens_jeans|mens_shoes|mens_tie|womens_top|womens_pants|womens_jacket|womens_coat|womens_sweater|womens_jeans|womens_dress|womens_skirt|womens_shoes|handbag|wallet|jewelry|scarf|belt|sunglasses|hat|collectible|hard_goods|other",
-  "size": "Size exactly as on tag",
+  "size": "Size exactly as on tag. Exception: if the tag shows extended sizing as a bare number+X (e.g. \"5X\", \"6X\") rather than with an L suffix, write it as \"5XL\"/\"6XL\" — that's the format eBay's own listings and taxonomy actually use, even when the physical tag omits the L.",
   "color": "Primary color(s)",
   "material": "Fabric content exactly as printed on the tag — e.g. '100% Cotton', '55% Supima Cotton 45% Polyester'. If not visible on any tag in the photos, write the primary fiber only if you can confidently determine it from context (e.g. '100% Cotton' for a clearly cotton item). NEVER write 'See tag', 'not visible', instruction text, or sentences with dashes. If truly unknown, leave blank.",
   "condition": "NEW_WITH_TAGS|NEW_NO_TAGS|EXCELLENT|VERY_GOOD|GOOD",
