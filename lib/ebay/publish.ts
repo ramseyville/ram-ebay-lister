@@ -672,7 +672,17 @@ function reconcileAspects(
       // a nonsense free-text value gets forced into a dropdown.
       const useDefault = !gate || gate.has(catKey); // only apply default if not gated out
       const defaultValue =
-        a.name === "Size Type" ? inferSizeType(String(listing.size || ""), catKey) : ASPECT_DEFAULTS[a.name] || "";
+        a.name === "Size Type"
+          ? inferSizeType(String(listing.size || ""), catKey)
+          : a.name === "Size"
+          // ASPECT_DEFAULTS["Size"] is "Regular" — a placeholder that means
+          // something for Size Type but is nonsense as an actual clothing
+          // size. Using it here submitted the literal string "Regular" as
+          // this item's Size when eBay's values list came back empty,
+          // which eBay correctly rejected as an unrecognized value. Use the
+          // item's own real (normalized) size instead.
+          ? normalizeExtendedSize(String(listing.size || ""))
+          : ASPECT_DEFAULTS[a.name] || "";
       const canonical =
         matchAllowed(current || "", a.values) ||
         (useDefault ? matchAllowed(defaultValue, a.values) : "") ||
@@ -692,7 +702,11 @@ function reconcileAspects(
     } else if (mustFill && !current) {
       const useDefault = !gate || gate.has(catKey);
       const defaultValue =
-        a.name === "Size Type" ? inferSizeType(String(listing.size || ""), catKey) : ASPECT_DEFAULTS[a.name];
+        a.name === "Size Type"
+          ? inferSizeType(String(listing.size || ""), catKey)
+          : a.name === "Size"
+          ? normalizeExtendedSize(String(listing.size || ""))
+          : ASPECT_DEFAULTS[a.name];
       const v = freeTextDefault(a.name, listing) || (useDefault ? defaultValue : "") || a.values[0] || "";
       const clipped = clipAspectValue(v);
       if (clipped) aspects[a.name] = [clipped];
