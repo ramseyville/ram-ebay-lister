@@ -628,6 +628,17 @@ function reconcileAspects(
         (useDefault ? matchAllowed(ASPECT_DEFAULTS[a.name] || "", a.values) : "") ||
         (a.name === "Department" ? pickDepartment(a.values, listing, catKey) : "") ||
         (mustFill ? a.values[0] : "") ||
+        // eBay's own metadata can say a field is required while returning
+        // ZERO valid values for it — an internal inconsistency, not
+        // something we invented (seen live during their Aug/Sept 2026 size
+        // enforcement rollout). Leaving the field unset in that case just
+        // trades one publish error ("value not supported") for a worse one
+        // ("required field missing"). Submit the known-standard default
+        // directly as a last resort — eBay's real publish-time validator
+        // may still accept it even when the metadata endpoint's list is
+        // empty or stale mid-rollout. The 25129 recovery above already
+        // exists for the case where even this gets rejected.
+        (mustFill && !a.values.length ? ASPECT_DEFAULTS[a.name] || "" : "") ||
         "";
       if (canonical) {
         aspects[a.name] = [canonical];
