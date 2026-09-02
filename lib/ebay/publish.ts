@@ -951,6 +951,178 @@ export async function retireSku(
   return deleteInventoryItem(accessToken, sku);
 }
 
+// ── Size taxonomy audit ─────────────────────────────────────────────────────
+//
+// eBay's Aug/Sept 2026 size-standardization enforcement affects listings
+// that ALREADY EXIST, not just new ones — a live listing with a size that
+// isn't one of eBay's current allowed values for its category gets hidden
+// from search once enforcement reaches the relevant site, silently, with no
+// notification beyond this one. Since new listings are now protected at
+// publish time (publishListing hard-blocks apparel/footwear if a size can't
+// be verified), this fills the other half: a READ-ONLY scan of everything
+// already live, using the exact same eBay-fetched taxonomy and matching
+// logic as publish time — nothing here modifies a listing.
+
+export interface SizeAuditEntry {
+  sku: string;
+  title: string;
+  listingId?: string;
+  categoryId: string;
+  currentSize: string | null;
+  status: "ok" | "at_risk" | "no_size_value" | "not_size_enforced" | "error";
+  suggestedValue?: string | null;
+  error?: string;
+}
+
+async function fetchAllInventoryItems(
+  accessToken: string
+): Promise<{ sku: string; title: string; size: string | null }[]> {
+  const items: { sku: string; title: string; size: string | null }[] = [];
+  let offset = 0;
+  const limit = 100;
+  for (;;) {
+    const resp = await ebayRequest(
+      accessToken,
+      "GET",
+      `${EBAY_INV_BASE}/inventory_item?limit=${limit}&offset=${offset}`
+    );
+    if (!resp.ok) break;
+    const batch: any[] = resp.json?.inventoryItems || [];
+    for (const item of batch) {
+      const sku = String(item.sku || "");
+      if (!sku) continue;
+      const title = item.product?.title || "(no title)";
+      const sizeArr = item.product?.aspects?.Size;
+      const size = Array.isArray(sizeArr) && sizeArr.length ? String(sizeArr[0]) : null;
+      items.push({ sku, title, size });
+    }
+    const total = Number(resp.json?.total || 0);
+    offset += limit;
+    if (offset >= total || batch.length === 0) break;
+  }
+  return items;
+}
+
+// Runs a small number of async tasks concurrently rather than one at a time
+// (faster for a large inventory) or all at once (would hammer eBay's rate
+// limits). 5 is conservative on purpose.
+async function runWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(new Array(Math.min(limit, items.length)).fill(0).map(() => worker()));
+  return results;
+}
+
+export async function auditListingSizes(accessToken: string): Promise<SizeAuditEntry[]> {
+  const inventoryItems = await fetchAllInventoryItems(accessToken);
+
+  const results = await runWithConcurrency(inventoryItems, 5, async (item): Promise<SizeAuditEntry> => {
+    const offerLookup = await ebayRequest(
+      accessToken,
+      "GET",
+      `${EBAY_INV_BASE}/offer?sku=${encodeURIComponent(item.sku)}&marketplace_id=${EBAY_MARKETPLACE_ID}`
+    );
+    if (!offerLookup.ok) {
+      return {
+        sku: item.sku,
+        title: item.title,
+        categoryId: "",
+        currentSize: item.size,
+        status: "error",
+        error: `Could not look up offer (${offerLookup.status}).`,
+      };
+    }
+    const offer = (offerLookup.json?.offers || []).find((o: any) => o.status === "PUBLISHED");
+    if (!offer) {
+      // Not a live listing — not at risk of being hidden from search.
+      return {
+        sku: item.sku,
+        title: item.title,
+        categoryId: "",
+        currentSize: item.size,
+        status: "not_size_enforced",
+      };
+    }
+    const categoryId = String(offer.categoryId || "");
+    const listingId = offer.listing?.listingId ? String(offer.listing.listingId) : undefined;
+
+    let meta: AspectMeta[] = [];
+    try {
+      meta = await categoryAspects(categoryId);
+    } catch {
+      return {
+        sku: item.sku,
+        title: item.title,
+        listingId,
+        categoryId,
+        currentSize: item.size,
+        status: "error",
+        error: "Could not fetch this category's size taxonomy from eBay.",
+      };
+    }
+    const sizeAspect = meta.find((a) => a.name === "Size");
+    if (!sizeAspect || !sizeAspect.values?.length) {
+      // This category doesn't have a controlled Size list — not affected.
+      return {
+        sku: item.sku,
+        title: item.title,
+        listingId,
+        categoryId,
+        currentSize: item.size,
+        status: "not_size_enforced",
+      };
+    }
+    if (!item.size) {
+      return {
+        sku: item.sku,
+        title: item.title,
+        listingId,
+        categoryId,
+        currentSize: null,
+        status: "no_size_value",
+      };
+    }
+    const exact = sizeAspect.values.some((v) => v.toLowerCase() === item.size!.toLowerCase());
+    if (exact) {
+      return {
+        sku: item.sku,
+        title: item.title,
+        listingId,
+        categoryId,
+        currentSize: item.size,
+        status: "ok",
+      };
+    }
+    // Not an exact match to eBay's current allowed values for this category —
+    // this is the at-risk case. Include a fuzzy-matched suggestion (same
+    // logic used at publish time) as a hint, but the current live value is
+    // NOT confirmed safe regardless of whether a suggestion was found.
+    const suggested = matchAllowed(item.size, sizeAspect.values);
+    return {
+      sku: item.sku,
+      title: item.title,
+      listingId,
+      categoryId,
+      currentSize: item.size,
+      status: "at_risk",
+      suggestedValue: suggested,
+    };
+  });
+
+  return results;
+}
+
 // eBay is decommissioning UploadSiteHostedPictures on Sept 30, 2026 — this
 // now uses the Media API instead: createImageFromFile (multipart upload,
 // returns an image_id via the Location header) followed by getImage (to
