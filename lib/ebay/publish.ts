@@ -468,6 +468,10 @@ const SIZE_ALIASES: Record<string, string[]> = {
   "xxl":  ["XXL", "XX-Large", "2XL", "2X-Large", "Extra Extra Large"],
   "xxxl": ["XXXL", "3XL", "3X-Large"],
   "xxxxl":["XXXXL", "4XL", "4X-Large"],
+  "xxxxxl":["XXXXXL", "5XL", "5X-Large"],
+  "xxxxxxl":["XXXXXXL", "6XL", "6X-Large"],
+  "5x":   ["5XL", "XXXXXL", "5X-Large"],
+  "6x":   ["6XL", "XXXXXXL", "6X-Large"],
   "xlt":  ["XLT", "X-Large Tall"],
   "lt":   ["LT", "Large Tall"],
   "mt":   ["MT", "Medium Tall"],
@@ -483,6 +487,15 @@ const SIZE_ALIASES: Record<string, string[]> = {
   "x-large":       ["XL", "Extra Large"],
   "x-small":       ["XS", "Extra Small"],
 };
+
+// "5X" → "5XL" etc. — the shorthand Claude sometimes writes vs. the suffix
+// eBay's own dropdowns actually use for extended sizes. SIZE_ALIASES/
+// matchAllowed already handles this when eBay's metadata has real values to
+// match against; this is the plain-text fallback for when it doesn't.
+function normalizeExtendedSize(size: string): string {
+  const m = /^([2-9])X$/i.exec((size || "").trim());
+  return m ? `${m[1]}XL` : size;
+}
 
 function matchAllowed(value: string, allowed: string[]): string | null {
   const ls = (value || "").trim().toLowerCase();
@@ -596,7 +609,8 @@ function reconcileAspects(
   const isPants = PANTS_CATEGORIES.has(catKey) || catKey === "mens_pants" || catKey === "womens_pants";
   for (const a of meta) {
     if (!a.name) continue;
-    const current = aspects[a.name]?.[0];
+    let current = aspects[a.name]?.[0];
+    if (a.name === "Size" && current) current = normalizeExtendedSize(current);
     const mustFill = a.required || (isPants && ALWAYS_FILL_FOR_PANTS.has(a.name));
 
     // Category gate: if this aspect has a gate and the current category isn't
@@ -1451,6 +1465,14 @@ export async function publishListing(
   // NOT a flat "Regular," which is wrong for XXL+ / extended sizes.
   if (SIZE_ENFORCED_CATEGORIES.has(catKey) && !aspects["Size Type"]?.length) {
     aspects["Size Type"] = [inferSizeType(String(listing.size || ""), catKey)];
+  }
+  // Same gap, but for Size itself — seen live on a jacket category where
+  // eBay's metadata evidently didn't include a matchable value for our
+  // submitted "5X," and the field ended up entirely absent rather than just
+  // mismatched. Guarantee something is always submitted, using the
+  // corrected suffix format eBay's own listings actually use (5XL, not 5X).
+  if (SIZE_ENFORCED_CATEGORIES.has(catKey) && !aspects["Size"]?.length && listing.size) {
+    aspects["Size"] = [normalizeExtendedSize(String(listing.size))];
   }
   const condCandidates = conditionCandidates(listing.condition, acceptedConds);
   const condition = condCandidates[0] || "USED_EXCELLENT";
