@@ -435,6 +435,12 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
   // them to the correct name instead of creating a stray field eBay ignores.
   const ASPECT_NAME_ALIASES: Record<string, string> = {
     "Front Style": "Front Type",
+    // Safety net alongside the prompt fix — the prompt used to instruct
+    // "Inseam Length" while eBay's real taxonomy field is plain "Inseam",
+    // so the AI's correctly-extracted value was landing under a key eBay
+    // never checks, silently falling through to eBay's own default (which
+    // is how a real 32" inseam was showing up as 24" on the live listing).
+    "Inseam Length": "Inseam",
   };
 
   // Merge in the model-provided item specifics (skip blanks + section labels).
