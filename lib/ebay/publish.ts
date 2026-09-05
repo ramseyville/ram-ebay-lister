@@ -511,18 +511,58 @@ const SIZE_ALIASES: Record<string, string[]> = {
 // eBay behavior: (1) pants use a bare waist number, never the combined
 // "28x29" waist-by-inseam string; (2) extended sizes need the "L" suffix
 // ("5X" → "5XL").
-function sizeAspectValue(rawSize: string, catKey: string): string {
-  const size = (rawSize || "").trim();
+// Generates every plausible eBay-format variant of a brand's own size code,
+// in priority order, so the actual matching step can check each one against
+// eBay's REAL fetched values for this category and use whichever one
+// genuinely exists there — rather than us guessing a single "correct"
+// format. Confirmed necessary: eBay's own Big & Tall taxonomy contains BOTH
+// "3XL" and a separately-coded "Big 3X" as distinct valid values (verified
+// via eBay's own category browse facets), so a brand tag reading "3XLB"
+// could map to either depending on the specific category — only checking
+// against eBay's real list settles it, not assuming either one.
+function sizeCandidates(rawSize: string, catKey: string): string[] {
+  let base = (rawSize || "").trim();
+  base = base.replace(/\s*\([^)]*\)\s*$/, ""); // strip parenthetical explanations
+  base = base.split("/")[0].trim(); // strip bilingual/dual-notation second half
+
   const isPantsCat =
     PANTS_CATEGORIES.has(catKey) ||
     catKey === "mens_pants" || catKey === "womens_pants" ||
     catKey === "mens_jeans" || catKey === "womens_jeans" ||
     catKey === "mens_shorts";
   if (isPantsCat) {
-    const m = /^(\d{2,3})\s*[xX]\s*\d{2,3}/.exec(size);
-    if (m) return m[1];
+    const wm = /^(\d{2,3})\s*[xX]\s*\d{2,3}/.exec(base);
+    if (wm) return [wm[1]];
   }
-  return normalizeExtendedSize(size);
+
+  const out: string[] = [];
+  const push = (v: string) => {
+    if (v && !out.includes(v)) out.push(v);
+  };
+  push(base);
+
+  // "3XL" or "3XLB" → try "3XL", "Big 3X", "3X" as well
+  let m = /^(\d)XLB?$/i.exec(base);
+  if (m) {
+    push(`${m[1]}XL`);
+    push(`Big ${m[1]}X`);
+    push(`${m[1]}X`);
+  }
+  // Bare "5X" → try "5XL", "Big 5X" as well
+  m = /^(\d)X$/i.exec(base);
+  if (m) {
+    push(`${m[1]}XL`);
+    push(`Big ${m[1]}X`);
+  }
+  return out;
+}
+
+// Single best-guess fallback for when there's nothing real to check
+// against (eBay's values list came back empty) — the first, most literal
+// candidate rather than a hardcoded assumption either way.
+function sizeAspectValue(rawSize: string, catKey: string): string {
+  const candidates = sizeCandidates(rawSize, catKey);
+  return candidates[0] || (rawSize || "").trim();
 }
 
 function normalizeExtendedSize(size: string): string {
@@ -698,6 +738,19 @@ function reconcileAspects(
       // Must be one of eBay's allowed values, or the publish 25002-fails /
       // a nonsense free-text value gets forced into a dropdown.
       const useDefault = !gate || gate.has(catKey); // only apply default if not gated out
+      // For Size specifically, don't assume which format is "correct" —
+      // eBay's own Big & Tall taxonomy has been confirmed to contain
+      // multiple valid formats for the same real size (e.g. both "3XL" and
+      // a separately-coded "Big 3X"). Try every plausible variant against
+      // what eBay's metadata actually returned for THIS category and use
+      // whichever one is real.
+      let sizeCandidateMatch: string | null = null;
+      if (a.name === "Size") {
+        for (const c of sizeCandidates(current || String(listing.size || ""), catKey)) {
+          sizeCandidateMatch = matchAllowed(c, a.values);
+          if (sizeCandidateMatch) break;
+        }
+      }
       const defaultValue =
         a.name === "Size Type"
           ? inferSizeType(String(listing.size || ""), catKey)
@@ -711,8 +764,9 @@ function reconcileAspects(
           ? sizeAspectValue(String(listing.size || ""), catKey)
           : ASPECT_DEFAULTS[a.name] || "";
       const canonical =
-        matchAllowed(current || "", a.values) ||
-        (useDefault ? matchAllowed(defaultValue, a.values) : "") ||
+        sizeCandidateMatch ||
+        (a.name !== "Size" ? matchAllowed(current || "", a.values) : "") ||
+        (useDefault && a.name !== "Size" ? matchAllowed(defaultValue, a.values) : "") ||
         (a.name === "Department" ? pickDepartment(a.values, listing, catKey) : "") ||
         (mustFill ? a.values[0] : "") ||
         // If eBay's metadata lists zero valid values for a field it still
