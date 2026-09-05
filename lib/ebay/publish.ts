@@ -368,7 +368,7 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
   };
 
   put("Brand", String(listing.brand || "").trim());
-  put("Size", String(listing.size || "").trim());
+  put("Size", sizeAspectValue(String(listing.size || ""), catKey));
   put("Color", singleValue(listing.color));
   // Material must be the actual fabric content, not an instruction note.
   // Strip common placeholder phrases the model sometimes generates.
@@ -504,6 +504,27 @@ const SIZE_ALIASES: Record<string, string[]> = {
 // eBay's own dropdowns actually use for extended sizes. SIZE_ALIASES/
 // matchAllowed already handles this when eBay's metadata has real values to
 // match against; this is the plain-text fallback for when it doesn't.
+// Single source of truth for what value the "Size" aspect should actually
+// hold, given the raw size string and category — used both when building
+// the initial aspects object and in the guarantee-fallback for when eBay's
+// metadata comes back empty. Two corrections, both confirmed against real
+// eBay behavior: (1) pants use a bare waist number, never the combined
+// "28x29" waist-by-inseam string; (2) extended sizes need the "L" suffix
+// ("5X" → "5XL").
+function sizeAspectValue(rawSize: string, catKey: string): string {
+  const size = (rawSize || "").trim();
+  const isPantsCat =
+    PANTS_CATEGORIES.has(catKey) ||
+    catKey === "mens_pants" || catKey === "womens_pants" ||
+    catKey === "mens_jeans" || catKey === "womens_jeans" ||
+    catKey === "mens_shorts";
+  if (isPantsCat) {
+    const m = /^(\d{2,3})\s*[xX]\s*\d{2,3}/.exec(size);
+    if (m) return m[1];
+  }
+  return normalizeExtendedSize(size);
+}
+
 function normalizeExtendedSize(size: string): string {
   const m = /^([2-9])X$/i.exec((size || "").trim());
   return m ? `${m[1]}XL` : size;
@@ -622,7 +643,7 @@ function reconcileAspects(
   for (const a of meta) {
     if (!a.name) continue;
     let current = aspects[a.name]?.[0];
-    if (a.name === "Size" && current) current = normalizeExtendedSize(current);
+    if (a.name === "Size" && current) current = sizeAspectValue(current, catKey);
     const mustFill = a.required || (isPants && ALWAYS_FILL_FOR_PANTS.has(a.name));
 
     // Category gate: if this aspect has a gate and the current category isn't
@@ -687,7 +708,7 @@ function reconcileAspects(
           // this item's Size when eBay's values list came back empty,
           // which eBay correctly rejected as an unrecognized value. Use the
           // item's own real (normalized) size instead.
-          ? normalizeExtendedSize(String(listing.size || ""))
+          ? sizeAspectValue(String(listing.size || ""), catKey)
           : ASPECT_DEFAULTS[a.name] || "";
       const canonical =
         matchAllowed(current || "", a.values) ||
@@ -711,7 +732,7 @@ function reconcileAspects(
         a.name === "Size Type"
           ? inferSizeType(String(listing.size || ""), catKey)
           : a.name === "Size"
-          ? normalizeExtendedSize(String(listing.size || ""))
+          ? sizeAspectValue(String(listing.size || ""), catKey)
           : ASPECT_DEFAULTS[a.name];
       const v = freeTextDefault(a.name, listing) || (useDefault ? defaultValue : "") || a.values[0] || "";
       const clipped = clipAspectValue(v);
@@ -1498,7 +1519,7 @@ export async function publishListing(
   // mismatched. Guarantee something is always submitted, using the
   // corrected suffix format eBay's own listings actually use (5XL, not 5X).
   if (SIZE_ENFORCED_CATEGORIES.has(catKey) && !aspects["Size"]?.length && listing.size) {
-    aspects["Size"] = [normalizeExtendedSize(String(listing.size))];
+    aspects["Size"] = [sizeAspectValue(String(listing.size), catKey)];
   }
   const condCandidates = conditionCandidates(listing.condition, acceptedConds);
   const condition = condCandidates[0] || "USED_EXCELLENT";
