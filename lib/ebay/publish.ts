@@ -2139,6 +2139,27 @@ async function publishOfferWithRecovery(
   // the real rejection than mask it with a misleading one.
   const NEVER_STRIP = new Set(["Size", "Size Type"]);
   for (let round = 0; round < 3 && eids.includes(25129); round++) {
+    // Size Type gets special handling: instead of stripping it (protected,
+    // like Size), rotate to the OTHER plausible candidate. eBay's live
+    // publish validator can reject a value that matched their own
+    // metadata — confirmed directly (a real listing pairs XLT with "Big &
+    // Tall" while our first-choice candidate was "Tall") — so if the
+    // candidate we chose gets rejected, the fix is trying the alternate,
+    // not giving up on the field entirely.
+    if (extractUnsupportedAspects(r).includes("Size Type")) {
+      const current = ctx.aspects["Size Type"]?.[0] || "";
+      const candidates = sizeTypeCandidates(ctx.aspects["Size"]?.[0] || "", ctx.catKey);
+      const next = candidates.find((c) => c.toLowerCase() !== current.toLowerCase());
+      if (next) {
+        ctx.aspects["Size Type"] = [next];
+        ctx.inventoryItem.product.aspects = ctx.aspects;
+        await putInventory();
+        r = await doPublish();
+        if (r.ok) return { success: true, sku, offerId, listingId: r.json?.listingId || "" };
+        eids = errorIds(r);
+        continue;
+      }
+    }
     const unsupported = extractUnsupportedAspects(r).filter((n) => !NEVER_STRIP.has(n));
     if (!unsupported.length) break;
     let changed = false;
