@@ -198,7 +198,8 @@ function isExtendedSize(rawSize: string): boolean {
   if (/X{2,}/.test(s)) return true; // "XXL", "XXXL"... repeated X
   if (/^(ST|MT|LT)$/.test(s)) return true; // bare tall codes
   if (/X+LT$/.test(s)) return true; // "XLT", "2XLT"... tall-with-X codes
-  if (/^BIG/.test(s)) return true; // already-spelled-out "Big..."
+  if (/BIG/.test(s)) return true; // "Big..." prefix OR "(Big Man)" mid-string
+  if (/TALL/.test(s)) return true; // "19 36/37 Tall" — the word appears anywhere, not just as the whole code
   if (/^P/.test(s) || /P$/.test(s)) return true; // petite markers
   if (/^\d{2,3}W/.test(s)) return true; // women's numeric plus ("16W")
   return false;
@@ -224,6 +225,14 @@ function inferSizeType(rawSize: string, catKey: string): string {
   // "Regular" — an invalid pairing, since XLT only exists under a
   // Tall/Big & Tall grouping, never under Regular.
   if (/^(ST|MT|LT|X+LT|[2-6]XLT)$/.test(size)) return "Tall";
+  // Dress-shirt-style sizes spell "Tall" / "Big Man" out as trailing words
+  // rather than compact codes (e.g. "19 36/37 Tall", "18 1/2 - 36/37 (Big
+  // Man)") — catch those as substrings too, not just whole-string patterns.
+  const hasBig = /BIG/.test(size);
+  const hasTall = /TALL/.test(size);
+  if (hasBig && hasTall) return "Big & Tall";
+  if (hasTall) return "Tall";
+  if (hasBig) return "Big & Tall";
   const isPantsCat =
     PANTS_CATEGORIES.has(catKey) || catKey === "mens_pants" || catKey === "mens_jeans" || catKey === "mens_shorts";
   if (isPantsCat) {
@@ -503,6 +512,26 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
       aspects["Waist Size"] = [wl[1]];
       aspects["Inseam"] = [wl[2]];
     }
+  }
+
+  // Dress shirts use neck×sleeve sizing ("19 36/37", "18 1/2 - 36/37") —
+  // eBay's real taxonomy (confirmed via live category data) wants the neck
+  // number alone for "Size" and the sleeve range alone for "Sleeve Length"
+  // as two separate fields, never the combined string. Same principle as
+  // the pants fix above: derive both directly from listing.size rather
+  // than depend on the AI separately reporting them correctly. Scoped
+  // specifically to top/shirt categories — a bare leading digit could
+  // otherwise misfire on shoe sizes, ring sizes, etc. that happen to also
+  // start with a number but mean something entirely different.
+  const isShirtCat = catKey === "mens_top" || catKey === "womens_top" || catKey === "mens_clothing" || catKey === "womens_clothing";
+  const rawSizeForShirt = String(listing.size || "").trim();
+  const shirtMatch = isShirtCat
+    ? /^(\d{1,2})(\.5)?\s*(?:(1\/2)\s*)?[-–]?\s*(\d{2}\/\d{2})?/.exec(rawSizeForShirt)
+    : null;
+  if (shirtMatch) {
+    const neck = shirtMatch[2] || shirtMatch[3] ? `${shirtMatch[1]}.5` : shirtMatch[1];
+    aspects["Size"] = [neck];
+    if (shirtMatch[4]) aspects["Sleeve Length"] = [shirtMatch[4]];
   }
 
   return aspects;
