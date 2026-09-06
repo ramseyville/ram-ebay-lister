@@ -247,44 +247,46 @@ function isExtendedSize(rawSize: string): boolean {
   });
 }
 
-function inferSizeType(rawSize: string, catKey: string): string {
+// Which Size Type actually pairs with an XLT-style code is NOT a fixed
+// answer — confirmed directly: a live, already-successful listing pairs
+// XLT with "Big & Tall," while inferSizeType's single deterministic answer
+// was "Tall." Both are genuinely valid depending on the specific leaf
+// category. Rather than commit to one guess, generate every plausible
+// Size Type and let the actual matching step check each against eBay's
+// real fetched values for THIS listing's category — same principle as
+// sizeCandidates for the Size value itself.
+function sizeTypeCandidates(rawSize: string, catKey: string): string[] {
   const parts = sizeParts(rawSize).map((p) => p.toUpperCase().replace(/[^A-Z0-9]/g, ""));
-  if (!parts.length) return "Regular";
+  if (!parts.length) return ["Regular"];
   const isWomens = catKey.startsWith("womens_");
 
   if (isWomens) {
-    if (parts.some((p) => /^[1-6]X$/.test(p) || /^(1[4-9]|[2-9]\d)W?$/.test(p))) return "Plus";
-    if (parts.some((p) => /^P/.test(p) || /P$/.test(p))) return "Petite";
-    return "Regular";
+    if (parts.some((p) => /^[1-6]X$/.test(p) || /^(1[4-9]|[2-9]\d)W?$/.test(p))) return ["Plus"];
+    if (parts.some((p) => /^P/.test(p) || /P$/.test(p))) return ["Petite"];
+    return ["Regular"];
   }
 
-  // Men's: XXL+ / 2X+ is Big & Tall. Also catch pants by waist size (44+).
-  // Trailing "B" (brands' own "Big" suffix, e.g. "3XLB") is tolerated here
-  // too — this was previously missing, so "3XLB" alone never matched, only
-  // "3XL" would have.
-  if (parts.some((p) => /^X{2,}L?B?$/.test(p) || /^[2-6]XL?B?$/.test(p))) return "Big & Tall";
-  // Tall-only codes (no "Big" bulk multiplier) get their own distinct Size
-  // Type — confirmed against real, already-successful listing data using
-  // "Tall" (not "Big & Tall") for these exact codes.
-  if (parts.some((p) => /^(ST|MT|LT|X+LT|[2-6]XLT)$/.test(p))) return "Tall";
-  // Dress-shirt-style sizes spell "Tall" / "Big Man" out as trailing words
-  // rather than compact codes (e.g. "19 36/37 Tall", "18 1/2 - 36/37 (Big
-  // Man)") — catch those as substrings too, not just whole-part patterns.
-  // Checking every part independently (not just the first) also means a
-  // bilingual duplicate landing on either side of a "/" still gets caught,
-  // whichever side it's on.
+  const isBigPattern = parts.some((p) => /^X{2,}L?B?$/.test(p) || /^[2-6]XL?B?$/.test(p));
+  const isTallPattern = parts.some((p) => /^(ST|MT|LT|X+LT|[2-6]XLT)$/.test(p));
   const hasBig = parts.some((p) => /BIG/.test(p));
   const hasTall = parts.some((p) => /TALL/.test(p));
-  if (hasBig && hasTall) return "Big & Tall";
-  if (hasTall) return "Tall";
-  if (hasBig) return "Big & Tall";
+
+  // Tall-coded items (XLT, 2XLT...) genuinely pair with either "Tall" or
+  // "Big & Tall" depending on category — try both.
+  if (isTallPattern || hasTall) return ["Tall", "Big & Tall"];
+  if (isBigPattern || hasBig) return ["Big & Tall", "Tall"];
+
   const isPantsCat =
     PANTS_CATEGORIES.has(catKey) || catKey === "mens_pants" || catKey === "mens_jeans" || catKey === "mens_shorts";
   if (isPantsCat) {
     const waistMatch = parts[0]?.match(/^(\d{2})/);
-    if (waistMatch && parseInt(waistMatch[1], 10) >= 44) return "Big & Tall";
+    if (waistMatch && parseInt(waistMatch[1], 10) >= 44) return ["Big & Tall", "Tall"];
   }
-  return "Regular";
+  return ["Regular"];
+}
+
+function inferSizeType(rawSize: string, catKey: string): string {
+  return sizeTypeCandidates(rawSize, catKey)[0];
 }
 
 const ASPECT_DEFAULTS: Record<string, string> = {
@@ -891,6 +893,17 @@ function reconcileAspects(
           if (sizeCandidateMatch) break;
         }
       }
+      // Same idea for Size Type: which pairing is correct for an XLT-style
+      // code (Tall vs Big & Tall) varies by specific leaf category — try
+      // every plausible candidate against what eBay's real values for THIS
+      // category actually are, rather than committing to one guess.
+      let sizeTypeCandidateMatch: string | null = null;
+      if (a.name === "Size Type") {
+        for (const c of sizeTypeCandidates(String(listing.size || ""), catKey)) {
+          sizeTypeCandidateMatch = matchAllowed(c, a.values);
+          if (sizeTypeCandidateMatch) break;
+        }
+      }
       const defaultValue =
         a.name === "Size Type"
           ? inferSizeType(String(listing.size || ""), catKey)
@@ -905,8 +918,9 @@ function reconcileAspects(
           : ASPECT_DEFAULTS[a.name] || "";
       const canonical =
         sizeCandidateMatch ||
-        (a.name !== "Size" ? matchAllowed(current || "", a.values) : "") ||
-        (useDefault && a.name !== "Size" ? matchAllowed(defaultValue, a.values) : "") ||
+        sizeTypeCandidateMatch ||
+        (a.name !== "Size" && a.name !== "Size Type" ? matchAllowed(current || "", a.values) : "") ||
+        (useDefault && a.name !== "Size" && a.name !== "Size Type" ? matchAllowed(defaultValue, a.values) : "") ||
         (a.name === "Department" ? pickDepartment(a.values, listing, catKey) : "") ||
         (mustFill ? a.values[0] : "") ||
         // If eBay's metadata lists zero valid values for a field it still
