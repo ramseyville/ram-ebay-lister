@@ -181,6 +181,29 @@ const ASPECT_CATEGORY_GATES: Record<string, Set<string>> = {
 // broken (confirmed directly: a manually-created eBay listing for the same
 // 3XL Psycho Bunny item used "Big & Tall" successfully). The flat "Regular"
 // default was simply wrong for extended sizes.
+// Deliberately WIDE net — broader than inferSizeType's precise
+// classification — whose only job is answering "could this plausibly be
+// an extended size, in any format we might not have specifically coded
+// for yet?" Used as a hard invariant check: whatever path Size Type was
+// computed through, if the size itself looks extended in any recognizable
+// way, it can never be allowed to end up paired with "Regular." False
+// positives here are cheap (they just trigger a recheck via
+// inferSizeType, which settles back to "Regular" on its own if that's
+// genuinely correct) — false negatives are the actual risk, so this
+// errs toward catching too much rather than too little.
+function isExtendedSize(rawSize: string): boolean {
+  const s = (rawSize || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!s) return false;
+  if (/\d+X/.test(s)) return true; // "2X", "3XL", "4X"... any digit+X
+  if (/X{2,}/.test(s)) return true; // "XXL", "XXXL"... repeated X
+  if (/^(ST|MT|LT)$/.test(s)) return true; // bare tall codes
+  if (/X+LT$/.test(s)) return true; // "XLT", "2XLT"... tall-with-X codes
+  if (/^BIG/.test(s)) return true; // already-spelled-out "Big..."
+  if (/^P/.test(s) || /P$/.test(s)) return true; // petite markers
+  if (/^\d{2,3}W/.test(s)) return true; // women's numeric plus ("16W")
+  return false;
+}
+
 function inferSizeType(rawSize: string, catKey: string): string {
   const size = (rawSize || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (!size) return "Regular";
@@ -1611,6 +1634,19 @@ export async function publishListing(
   // NOT a flat "Regular," which is wrong for XXL+ / extended sizes.
   if (SIZE_ENFORCED_CATEGORIES.has(catKey) && !aspects["Size Type"]?.length) {
     aspects["Size Type"] = [inferSizeType(String(listing.size || ""), catKey)];
+  }
+  // Hard invariant, independent of every path above: an extended size can
+  // NEVER end up paired with Size Type "Regular." This is a genuine
+  // structural guarantee, not another format-specific pattern to maintain
+  // — it runs last, regardless of which branch computed Size Type, and
+  // even covers formats inferSizeType doesn't have a precise rule for yet:
+  // if isExtendedSize's wide net catches something inferSizeType can't
+  // specifically classify (so inferSizeType itself would default to
+  // "Regular"), this falls back to "Big & Tall" rather than let a known-
+  // extended size slip through paired with Regular anyway.
+  if (SIZE_ENFORCED_CATEGORIES.has(catKey) && isExtendedSize(String(listing.size || ""))) {
+    const inferred = inferSizeType(String(listing.size || ""), catKey);
+    aspects["Size Type"] = [inferred.toLowerCase() === "regular" ? "Big & Tall" : inferred];
   }
   // Same gap, but for Size itself — seen live on a jacket category where
   // eBay's metadata evidently didn't include a matchable value for our
