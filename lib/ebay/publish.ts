@@ -2160,6 +2160,21 @@ async function publishOfferWithRecovery(
         continue;
       }
     }
+    // Size itself, unlike Size Type, usually has no alternate format to
+    // rotate to once it's already in the correct standard form (e.g.
+    // "2XLT" is not ambiguous the way Tall/Big & Tall is). If eBay rejects
+    // it anyway, that can still be the same metadata/live-validator
+    // disagreement we've seen elsewhere tonight, just with no better value
+    // to substitute — so retry the SAME value once after a brief pause, in
+    // case it's momentary propagation lag on eBay's side rather than
+    // something a different value would ever fix.
+    if (extractUnsupportedAspects(r).includes("Size") && round === 0) {
+      await new Promise((res) => setTimeout(res, 1500));
+      r = await doPublish();
+      if (r.ok) return { success: true, sku, offerId, listingId: r.json?.listingId || "" };
+      eids = errorIds(r);
+      if (!eids.includes(25129)) continue;
+    }
     const unsupported = extractUnsupportedAspects(r).filter((n) => !NEVER_STRIP.has(n));
     if (!unsupported.length) break;
     let changed = false;
