@@ -191,52 +191,97 @@ const ASPECT_CATEGORY_GATES: Record<string, Set<string>> = {
 // inferSizeType, which settles back to "Regular" on its own if that's
 // genuinely correct) — false negatives are the actual risk, so this
 // errs toward catching too much rather than too little.
+// Shared first step for EVERY size-related function (Size value matching,
+// Size Type inference, extended-size detection). Strips parenthetical
+// explanations and bilingual/dual-notation second halves BEFORE anything
+// else runs. This used to live only inside sizeCandidates() — inferSizeType
+// and isExtendedSize did their own separate, simpler cleaning that never
+// split on "/", so a bilingual size like "XLT/TGL" became the mashed-
+// together "XLTTGL" for Size Type purposes even though the Size value
+// itself was already correctly reduced to "XLT". Matches none of the Tall
+// patterns, Size Type silently defaults to "Regular" — an invalid pairing
+// with XLT. One shared function means this can't drift out of sync again.
+function cleanSizeBase(rawSize: string): string {
+  let base = (rawSize || "").trim();
+  base = base.replace(/\s*\([^)]*\)\s*$/, ""); // strip parenthetical explanations
+  if (/^O\/?S$/i.test(base)) return base; // "O/S" isn't bilingual — leave it alone here
+  base = base.split("/")[0].trim(); // strip bilingual/dual-notation second half
+  return base;
+}
+
+// For DETECTING signals (is this extended? what type?), a "/" could mean
+// two different things depending on context — bilingual duplicate notation
+// ("XLT/TGL") or a numeric measurement range ("36/37" in a dress shirt
+// sleeve length) — and picking one side to discard is wrong for whichever
+// case it isn't. So detection checks EVERY slash-separated part
+// independently and combines what it finds, rather than committing to one
+// side. (Choosing which single VALUE to actually submit is a different
+// question, handled separately by sizeCandidates/cleanSizeBase, which
+// correctly does commit to the first/English part.)
+function sizeParts(rawSize: string): string[] {
+  const raw = (rawSize || "").trim();
+  // The parenthetical is usually just an explanation safe to drop when
+  // picking a VALUE to submit ("XLT (XL Tall)" — the code alone is enough).
+  // But for DETECTION it can be the only place a signal appears at all
+  // ("18 1/2 - 36/37 (Big Man)" has no other hint of "Big" anywhere) — so
+  // it gets checked as its own part rather than discarded.
+  const parenMatch = /\(([^)]*)\)\s*$/.exec(raw);
+  const withoutParen = raw.replace(/\s*\([^)]*\)\s*$/, "");
+  const mainParts = withoutParen.split("/").map((p) => p.trim()).filter(Boolean);
+  return parenMatch && parenMatch[1].trim() ? [...mainParts, parenMatch[1].trim()] : mainParts;
+}
+
 function isExtendedSize(rawSize: string): boolean {
-  const s = (rawSize || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (!s) return false;
-  if (/\d+X/.test(s)) return true; // "2X", "3XL", "4X"... any digit+X
-  if (/X{2,}/.test(s)) return true; // "XXL", "XXXL"... repeated X
-  if (/^(ST|MT|LT)$/.test(s)) return true; // bare tall codes
-  if (/X+LT$/.test(s)) return true; // "XLT", "2XLT"... tall-with-X codes
-  if (/BIG/.test(s)) return true; // "Big..." prefix OR "(Big Man)" mid-string
-  if (/TALL/.test(s)) return true; // "19 36/37 Tall" — the word appears anywhere, not just as the whole code
-  if (/^P/.test(s) || /P$/.test(s)) return true; // petite markers
-  if (/^\d{2,3}W/.test(s)) return true; // women's numeric plus ("16W")
-  return false;
+  return sizeParts(rawSize).some((part) => {
+    const s = part.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!s) return false;
+    if (/\d+X/.test(s)) return true; // "2X", "3XL", "4X"... any digit+X
+    if (/X{2,}/.test(s)) return true; // "XXL", "XXXL"... repeated X
+    if (/^(ST|MT|LT)$/.test(s)) return true; // bare tall codes
+    if (/X+LT$/.test(s)) return true; // "XLT", "2XLT"... tall-with-X codes
+    if (/BIG/.test(s)) return true; // "Big..." prefix OR "(Big Man)" mid-string
+    if (/TALL/.test(s)) return true; // the word, anywhere
+    if (/^P/.test(s) || /P$/.test(s)) return true; // petite markers
+    if (/^\d{2,3}W/.test(s)) return true; // women's numeric plus ("16W")
+    return false;
+  });
 }
 
 function inferSizeType(rawSize: string, catKey: string): string {
-  const size = (rawSize || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (!size) return "Regular";
+  const parts = sizeParts(rawSize).map((p) => p.toUpperCase().replace(/[^A-Z0-9]/g, ""));
+  if (!parts.length) return "Regular";
   const isWomens = catKey.startsWith("womens_");
 
   if (isWomens) {
-    if (/^[1-6]X$/.test(size) || /^(1[4-9]|[2-9]\d)W?$/.test(size)) return "Plus";
-    if (/^P/.test(size) || /P$/.test(size)) return "Petite";
+    if (parts.some((p) => /^[1-6]X$/.test(p) || /^(1[4-9]|[2-9]\d)W?$/.test(p))) return "Plus";
+    if (parts.some((p) => /^P/.test(p) || /P$/.test(p))) return "Petite";
     return "Regular";
   }
 
   // Men's: XXL+ / 2X+ is Big & Tall. Also catch pants by waist size (44+).
-  if (/^X{2,}L?$/.test(size) || /^[2-6]XL?$/.test(size)) return "Big & Tall";
+  // Trailing "B" (brands' own "Big" suffix, e.g. "3XLB") is tolerated here
+  // too — this was previously missing, so "3XLB" alone never matched, only
+  // "3XL" would have.
+  if (parts.some((p) => /^X{2,}L?B?$/.test(p) || /^[2-6]XL?B?$/.test(p))) return "Big & Tall";
   // Tall-only codes (no "Big" bulk multiplier) get their own distinct Size
   // Type — confirmed against real, already-successful listing data using
-  // "Tall" (not "Big & Tall") for these exact codes. This was missing
-  // entirely before, so an item sized "XLT" was getting Size Type
-  // "Regular" — an invalid pairing, since XLT only exists under a
-  // Tall/Big & Tall grouping, never under Regular.
-  if (/^(ST|MT|LT|X+LT|[2-6]XLT)$/.test(size)) return "Tall";
+  // "Tall" (not "Big & Tall") for these exact codes.
+  if (parts.some((p) => /^(ST|MT|LT|X+LT|[2-6]XLT)$/.test(p))) return "Tall";
   // Dress-shirt-style sizes spell "Tall" / "Big Man" out as trailing words
   // rather than compact codes (e.g. "19 36/37 Tall", "18 1/2 - 36/37 (Big
-  // Man)") — catch those as substrings too, not just whole-string patterns.
-  const hasBig = /BIG/.test(size);
-  const hasTall = /TALL/.test(size);
+  // Man)") — catch those as substrings too, not just whole-part patterns.
+  // Checking every part independently (not just the first) also means a
+  // bilingual duplicate landing on either side of a "/" still gets caught,
+  // whichever side it's on.
+  const hasBig = parts.some((p) => /BIG/.test(p));
+  const hasTall = parts.some((p) => /TALL/.test(p));
   if (hasBig && hasTall) return "Big & Tall";
   if (hasTall) return "Tall";
   if (hasBig) return "Big & Tall";
   const isPantsCat =
     PANTS_CATEGORIES.has(catKey) || catKey === "mens_pants" || catKey === "mens_jeans" || catKey === "mens_shorts";
   if (isPantsCat) {
-    const waistMatch = size.match(/^(\d{2})/);
+    const waistMatch = parts[0]?.match(/^(\d{2})/);
     if (waistMatch && parseInt(waistMatch[1], 10) >= 44) return "Big & Tall";
   }
   return "Regular";
@@ -605,18 +650,16 @@ const SIZE_ALIASES: Record<string, string[]> = {
 // could map to either depending on the specific category — only checking
 // against eBay's real list settles it, not assuming either one.
 function sizeCandidates(rawSize: string, catKey: string): string[] {
-  let base = (rawSize || "").trim();
-  base = base.replace(/\s*\([^)]*\)\s*$/, ""); // strip parenthetical explanations
+  const base0 = cleanSizeBase(rawSize);
 
   // "O/S" (One Size) has a slash too, but it's an abbreviation, not
-  // bilingual dual-notation — the blind bilingual split below was
-  // chopping it down to a nonsense single letter "O". Recognize it first,
-  // before that split ever runs.
-  if (/^O\/?S$/i.test(base)) {
+  // bilingual dual-notation — cleanSizeBase already leaves it untouched;
+  // recognize it here before treating it as a normal code.
+  if (/^O\/?S$/i.test(base0)) {
     return ["One Size", "OS", "O/S"];
   }
 
-  base = base.split("/")[0].trim(); // strip bilingual/dual-notation second half
+  const base = base0;
 
   const isPantsCat =
     PANTS_CATEGORIES.has(catKey) ||
