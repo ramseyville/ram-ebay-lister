@@ -268,13 +268,17 @@ function sizeTypeCandidates(rawSize: string, catKey: string): string[] {
 
   const isBigPattern = parts.some((p) => /^X{2,}L?B?$/.test(p) || /^[2-6]XL?B?$/.test(p));
   const isTallPattern = parts.some((p) => /^(ST|MT|LT|X+LT|[2-6]XLT)$/.test(p));
+  // "3XT" (3X-Tall) and "4XB" (4X-Big) — the "L"-less abbreviation style,
+  // distinct from both "NXLT"/"NXLB" and bare "NX".
+  const isTallAbbrev = parts.some((p) => /^\dXT$/.test(p));
+  const isBigAbbrev = parts.some((p) => /^\dXB$/.test(p));
   const hasBig = parts.some((p) => /BIG/.test(p));
   const hasTall = parts.some((p) => /TALL/.test(p));
 
   // Tall-coded items (XLT, 2XLT...) genuinely pair with either "Tall" or
   // "Big & Tall" depending on category — try both.
-  if (isTallPattern || hasTall) return ["Tall", "Big & Tall"];
-  if (isBigPattern || hasBig) return ["Big & Tall", "Tall"];
+  if (isTallPattern || isTallAbbrev || hasTall) return ["Tall", "Big & Tall"];
+  if (isBigPattern || isBigAbbrev || hasBig) return ["Big & Tall", "Tall"];
 
   const isPantsCat =
     PANTS_CATEGORIES.has(catKey) || catKey === "mens_pants" || catKey === "mens_jeans" || catKey === "mens_shorts";
@@ -708,6 +712,18 @@ function sizeCandidates(rawSize: string, catKey: string): string[] {
   if (m) {
     push(`${m[1]}XL`);
     push(`Big ${m[1]}X`);
+  }
+  // "3XT" (3X-Tall, no "L") and "4XB" (4X-Big, no "L") — a third
+  // abbreviation style, distinct from both "NXLT"/"NXLB" and bare "NX".
+  m = /^(\d)XT$/i.exec(base);
+  if (m) {
+    push(`${m[1]}XLT`);
+  }
+  m = /^(\d)XB$/i.exec(base);
+  if (m) {
+    push(`${m[1]}XL`);
+    push(`Big ${m[1]}X`);
+    push(`${m[1]}X`);
   }
   push(base);
   return out;
