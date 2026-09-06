@@ -581,6 +581,20 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
     if (shirtMatch[4]) aspects["Sleeve Length"] = [shirtMatch[4]];
   }
 
+  // Final safety net, regardless of which path above set it: if whatever
+  // ended up in "Size" isn't actually a size code (e.g. the model wrote
+  // "Big Man" — a real fit description, but not something eBay's taxonomy
+  // has any concept of as a Size value), drop it. Submitting known-
+  // descriptive text there is a guaranteed rejection; leaving it unset
+  // lets eBay's own required-field fallback pick a real, valid option
+  // instead, and the actual size can be corrected on the live listing
+  // once it's legible from a clearer photo.
+  const finalSize = aspects["Size"]?.[0];
+  if (finalSize) {
+    const cleanedFinal = finalSize.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!looksLikeSizeCode(cleanedFinal)) delete aspects["Size"];
+  }
+
   return aspects;
 }
 
@@ -702,9 +716,29 @@ function sizeCandidates(rawSize: string, catKey: string): string[] {
 // Single best-guess fallback for when there's nothing real to check
 // against (eBay's values list came back empty) — the first, most literal
 // candidate rather than a hardcoded assumption either way.
+// Distinguishes an actual size code from purely descriptive text that
+// occasionally slips through when a tag's specific size isn't legible
+// (e.g. "Big Man" — real information, but not a size code eBay's taxonomy
+// has any concept of; submitting it as Size is a guaranteed rejection).
+// A real code either has a digit somewhere (neck sizes, waist, 2XL, 5X...)
+// or matches the known letter-size family (XS through XXXXL, one-size).
+function looksLikeSizeCode(cleaned: string): boolean {
+  if (!cleaned) return false;
+  if (/\d/.test(cleaned)) return true;
+  if (/^X{0,4}(S|L)$/.test(cleaned) || cleaned === "M" || cleaned === "OS") return true;
+  return false;
+}
+
 function sizeAspectValue(rawSize: string, catKey: string): string {
   const candidates = sizeCandidates(rawSize, catKey);
-  return candidates[0] || (rawSize || "").trim();
+  const best = candidates[0] || (rawSize || "").trim();
+  const cleaned = best.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  // Not a real size code (e.g. "Big Man") — don't submit it. Better to
+  // leave the field for eBay's own required-field fallback to pick SOME
+  // valid option than guarantee a rejection with text that was never a
+  // size code in the first place. The actual size can be corrected on the
+  // live listing afterward once the real number is known.
+  return looksLikeSizeCode(cleaned) ? best : "";
 }
 
 function normalizeExtendedSize(size: string): string {
@@ -2076,6 +2110,7 @@ export async function publishListing(
     offerBody,
     fallbacks,
     condCandidates,
+    rawSize: String(listing.size || ""),
   });
 }
 
@@ -2091,6 +2126,7 @@ async function publishOfferWithRecovery(
     offerBody: any;
     fallbacks: string[];
     condCandidates: string[];
+    rawSize: string;
   }
 ): Promise<PublishResult> {
   const { sku, offerId } = ctx;
@@ -2163,7 +2199,13 @@ async function publishOfferWithRecovery(
     // not giving up on the field entirely.
     if (extractUnsupportedAspects(r).includes("Size Type")) {
       const current = ctx.aspects["Size Type"]?.[0] || "";
-      const candidates = sizeTypeCandidates(ctx.aspects["Size"]?.[0] || "", ctx.catKey);
+      // Use the ORIGINAL raw size string here, not ctx.aspects["Size"] —
+      // for dress shirts that's already been reduced to just the neck
+      // number ("19"), which has lost the "Tall" signal that only existed
+      // in the full original string ("19 36/37 Tall"). Regenerating
+      // candidates from the stripped value was picking the wrong fallback
+      // ("Regular") because the signal was already gone by this point.
+      const candidates = sizeTypeCandidates(ctx.rawSize, ctx.catKey);
       const next = candidates.find((c) => c.toLowerCase() !== current.toLowerCase());
       if (next) {
         ctx.aspects["Size Type"] = [next];
