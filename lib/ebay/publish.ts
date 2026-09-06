@@ -450,6 +450,31 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
     const val = clipAspectValue(singleValue(v));
     if (val && !aspects[k]) aspects[k] = [val];
   }
+
+  // Waist Size and Inseam, for pants, are derived directly from
+  // listing.size ("28x30") and OVERRIDE whatever the model separately put
+  // in item_specifics for these two fields. The model has proven
+  // inconsistent about re-populating these as their own structured
+  // fields — one item published with them correct, a near-identical one
+  // published with Inseam silently wrong and Waist Size missing entirely,
+  // even though both had the correct "28x30" sitting right in the title.
+  // Since the waist/inseam numbers are already reliably captured in
+  // listing.size every time, deriving directly from that one proven
+  // source removes the AI-reliability question for these two fields
+  // entirely, rather than hoping a second, redundant field agrees with it.
+  const isPantsForMeasurements =
+    PANTS_CATEGORIES.has(catKey) ||
+    catKey === "mens_pants" || catKey === "womens_pants" ||
+    catKey === "mens_jeans" || catKey === "womens_jeans" ||
+    catKey === "mens_shorts";
+  if (isPantsForMeasurements) {
+    const wl = /^(\d{2,3})\s*[xX]\s*(\d{2,3})/.exec(String(listing.size || "").trim());
+    if (wl) {
+      aspects["Waist Size"] = [wl[1]];
+      aspects["Inseam"] = [wl[2]];
+    }
+  }
+
   return aspects;
 }
 
