@@ -587,7 +587,14 @@ function sizeCandidates(rawSize: string, catKey: string): string[] {
 // candidate rather than a hardcoded assumption either way.
 function sizeAspectValue(rawSize: string, catKey: string): string {
   const candidates = sizeCandidates(rawSize, catKey);
-  return candidates[0] || (rawSize || "").trim();
+  // candidates[0] is always just the cleaned-but-untransformed raw code
+  // (e.g. "3XLB") — exactly the brand-specific string that's already been
+  // confirmed to get rejected as "custom." When there's nothing real to
+  // check candidates against (eBay's values list came back empty), prefer
+  // the first actual TRANSFORM (the plain "NXL" form) as the best single
+  // guess — it's the format confirmed working on a real eBay listing
+  // earlier tonight, unlike the untouched brand code.
+  return candidates[1] || candidates[0] || (rawSize || "").trim();
 }
 
 function normalizeExtendedSize(size: string): string {
