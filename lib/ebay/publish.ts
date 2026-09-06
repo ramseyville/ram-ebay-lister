@@ -194,6 +194,13 @@ function inferSizeType(rawSize: string, catKey: string): string {
 
   // Men's: XXL+ / 2X+ is Big & Tall. Also catch pants by waist size (44+).
   if (/^X{2,}L?$/.test(size) || /^[2-6]XL?$/.test(size)) return "Big & Tall";
+  // Tall-only codes (no "Big" bulk multiplier) get their own distinct Size
+  // Type — confirmed against real, already-successful listing data using
+  // "Tall" (not "Big & Tall") for these exact codes. This was missing
+  // entirely before, so an item sized "XLT" was getting Size Type
+  // "Regular" — an invalid pairing, since XLT only exists under a
+  // Tall/Big & Tall grouping, never under Regular.
+  if (/^(ST|MT|LT|X+LT|[2-6]XLT)$/.test(size)) return "Tall";
   const isPantsCat =
     PANTS_CATEGORIES.has(catKey) || catKey === "mens_pants" || catKey === "mens_jeans" || catKey === "mens_shorts";
   if (isPantsCat) {
