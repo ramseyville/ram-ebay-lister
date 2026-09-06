@@ -548,6 +548,15 @@ const SIZE_ALIASES: Record<string, string[]> = {
 function sizeCandidates(rawSize: string, catKey: string): string[] {
   let base = (rawSize || "").trim();
   base = base.replace(/\s*\([^)]*\)\s*$/, ""); // strip parenthetical explanations
+
+  // "O/S" (One Size) has a slash too, but it's an abbreviation, not
+  // bilingual dual-notation — the blind bilingual split below was
+  // chopping it down to a nonsense single letter "O". Recognize it first,
+  // before that split ever runs.
+  if (/^O\/?S$/i.test(base)) {
+    return ["One Size", "OS", "O/S"];
+  }
+
   base = base.split("/")[0].trim(); // strip bilingual/dual-notation second half
 
   const isPantsCat =
@@ -564,21 +573,25 @@ function sizeCandidates(rawSize: string, catKey: string): string[] {
   const push = (v: string) => {
     if (v && !out.includes(v)) out.push(v);
   };
-  push(base);
 
-  // "3XL" or "3XLB" → try "3XL", "Big 3X", "3X" as well
+  // Push transforms FIRST, raw base LAST — matching order doesn't affect
+  // whether a real value gets found (every candidate gets tried either
+  // way), but it does determine what sizeAspectValue() picks as its single
+  // best guess when there's nothing real to check against. The raw brand
+  // code ("3XLB") is the least likely of the options to be a real eBay
+  // value, so it shouldn't be candidates[0].
   let m = /^(\d)XLB?$/i.exec(base);
   if (m) {
     push(`${m[1]}XL`);
     push(`Big ${m[1]}X`);
     push(`${m[1]}X`);
   }
-  // Bare "5X" → try "5XL", "Big 5X" as well
   m = /^(\d)X$/i.exec(base);
   if (m) {
     push(`${m[1]}XL`);
     push(`Big ${m[1]}X`);
   }
+  push(base);
   return out;
 }
 
@@ -587,14 +600,7 @@ function sizeCandidates(rawSize: string, catKey: string): string[] {
 // candidate rather than a hardcoded assumption either way.
 function sizeAspectValue(rawSize: string, catKey: string): string {
   const candidates = sizeCandidates(rawSize, catKey);
-  // candidates[0] is always just the cleaned-but-untransformed raw code
-  // (e.g. "3XLB") — exactly the brand-specific string that's already been
-  // confirmed to get rejected as "custom." When there's nothing real to
-  // check candidates against (eBay's values list came back empty), prefer
-  // the first actual TRANSFORM (the plain "NXL" form) as the best single
-  // guess — it's the format confirmed working on a real eBay listing
-  // earlier tonight, unlike the untouched brand code.
-  return candidates[1] || candidates[0] || (rawSize || "").trim();
+  return candidates[0] || (rawSize || "").trim();
 }
 
 function normalizeExtendedSize(size: string): string {
