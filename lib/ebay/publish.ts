@@ -922,7 +922,17 @@ function reconcileAspects(
       // whichever one is real.
       let sizeCandidateMatch: string | null = null;
       if (a.name === "Size") {
-        for (const c of sizeCandidates(current || String(listing.size || ""), catKey)) {
+        // If current is empty, that can mean two different things: never
+        // set at all, or deliberately deleted earlier because it wasn't a
+        // real size code (e.g. "Big Man"). Falling back to raw
+        // listing.size unconditionally was undoing that deletion — the
+        // unusable text came right back in as a candidate here, silently
+        // bypassing the check. Only fall back to it if it actually passes
+        // the same test.
+        const rawFallback = String(listing.size || "");
+        const cleanedRaw = rawFallback.toUpperCase().replace(/[^A-Z0-9]/g, "");
+        const fallbackInput = current || (looksLikeSizeCode(cleanedRaw) ? rawFallback : "");
+        for (const c of sizeCandidates(fallbackInput, catKey)) {
           sizeCandidateMatch = matchAllowed(c, a.values);
           if (sizeCandidateMatch) break;
         }
