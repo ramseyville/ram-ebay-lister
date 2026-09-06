@@ -1619,10 +1619,25 @@ export async function publishListing(
   const { sku, listing } = input;
   const catKey = String(listing.category || "other");
   const { categoryId: staticCat, fallbacks } = resolveCategory(listing);
-  // Ask eBay for the real LEAF category from the title + hint; fall back to the
-  // static map only if Taxonomy is unavailable. (Fixes 25005 non-leaf errors.)
-  const leaf = await suggestLeafCategory(`${listing.category_hint || ""} ${listing.title || ""}`);
-  let catId = leaf || staticCat;
+  // Trust our own category classification (from the AI's deliberate,
+  // considered read of the item) FIRST when we have a real mapping for it.
+  // This used to be reversed — eBay's dynamic title-keyword suggestion ran
+  // first, with our own mapping only as a fallback — on the theory that
+  // our static map might occasionally point at a non-leaf category (fixes
+  // 25005). But that traded a rare non-leaf problem for a much worse one:
+  // a fuzzy, title-based suggester silently overriding a CORRECT
+  // classification with a wrong one on any title with ambiguous keywords
+  // — confirmed directly (a genuine half-zip pullover/sweatshirt landed in
+  // "Casual Button-Down Shirts" instead of Sweaters, and every subsequent
+  // size rejection was really this wrong-category problem in disguise,
+  // not anything about the size values themselves). The existing 25005
+  // recovery (ctx.fallbacks) still catches the rare case where our own
+  // mapping genuinely isn't a leaf category.
+  const hasSpecificMapping = catKey !== "other" && Boolean(CATEGORY_MAP[catKey]);
+  const leaf = hasSpecificMapping
+    ? null
+    : await suggestLeafCategory(`${listing.category_hint || ""} ${listing.title || ""}`);
+  let catId: string = staticCat || leaf || "";
 
   if (!setup.fulfillmentPolicyId || !setup.paymentPolicyId || !setup.returnPolicyId) {
     return {
