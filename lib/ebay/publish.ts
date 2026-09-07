@@ -34,7 +34,18 @@ const CATEGORY_MAP: Record<string, string> = {
   video_game: "139973", media: "11232", vinyl_record: "176985", cd: "176984",
   dvd_bluray: "617", musical_instrument: "619", kitchenware: "20625",
   glassware: "50693", pottery_ceramics: "24", art: "550", craft: "14339",
-  tool: "631", automotive: "6028", office: "25298", health_beauty: "26395",
+  tool: "631", automotive: "6028", office: "25298",
+  // 26395 (previously used here) is the broad PARENT "Health & Beauty"
+  // category, not a leaf — confirmed directly (that's exactly what caused
+  // a 25005 "not a leaf category" rejection). "Health & beauty" covers
+  // wildly different real leaves (body wash vs. skincare vs. vitamins),
+  // so no single ID is ever fully correct here — see hasSpecificMapping
+  // below, which routes this category through the live per-item
+  // suggester instead of trusting this value directly. 31754 (Body
+  // Washes & Shower Gels — confirmed via multiple live eBay listing
+  // URLs) is kept only as a last-resort fallback if that live lookup
+  // ever fails outright.
+  health_beauty: "31754",
   small_appliance: "20667", lighting: "20697", linens: "20444", holiday: "16086",
   board_game: "233", puzzle: "2613", plush: "2624", action_figure: "246",
   trading_card: "183050", sports_memorabilia: "64482", coin: "11116",
@@ -1693,7 +1704,13 @@ export async function publishListing(
   // not anything about the size values themselves). The existing 25005
   // recovery (ctx.fallbacks) still catches the rare case where our own
   // mapping genuinely isn't a leaf category.
-  const hasSpecificMapping = catKey !== "other" && Boolean(CATEGORY_MAP[catKey]);
+  // "health_beauty" is deliberately excluded here alongside "other" — it's
+  // a broad umbrella covering genuinely different real leaves per item
+  // (body wash, skincare, vitamins...), so no single static ID can ever be
+  // trusted the way a specific classification like "mens_sweater" can.
+  // Always let the live per-item suggester find the right one.
+  const hasSpecificMapping =
+    catKey !== "other" && catKey !== "health_beauty" && Boolean(CATEGORY_MAP[catKey]);
   const leaf = hasSpecificMapping
     ? null
     : await suggestLeafCategory(`${listing.category_hint || ""} ${listing.title || ""}`);
