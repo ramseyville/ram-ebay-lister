@@ -1697,7 +1697,14 @@ export async function publishListing(
   const leaf = hasSpecificMapping
     ? null
     : await suggestLeafCategory(`${listing.category_hint || ""} ${listing.title || ""}`);
-  let catId: string = staticCat || leaf || "";
+  // When we DO have a specific mapping, trust it — that's the whole point
+  // of the fix above. But when we don't, staticCat is just resolveCategory's
+  // own generic "other" catch-all ("99" — not a real leaf category), which
+  // is exactly what triggers this 25005 error. In that case the dynamic
+  // suggestion (leaf) is the one actually worth using; it was being
+  // computed correctly but then never selected, since staticCat is never
+  // empty and always won the "staticCat || leaf" check regardless.
+  let catId: string = hasSpecificMapping ? staticCat : leaf || staticCat;
 
   if (!setup.fulfillmentPolicyId || !setup.paymentPolicyId || !setup.returnPolicyId) {
     return {
