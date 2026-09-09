@@ -1621,15 +1621,31 @@ function pickNamedFulfillmentPolicy(r: EbayResp): string {
 
 export async function fetchAccountSetup(accessToken: string): Promise<AccountSetup> {
   const mp = `marketplace_id=${EBAY_MARKETPLACE_ID}`;
-  const [ful, pay, ret] = await Promise.all([
-    ebayRequest(accessToken, "GET", `${EBAY_ACC_BASE}/fulfillment_policy?${mp}`),
-    ebayRequest(accessToken, "GET", `${EBAY_ACC_BASE}/payment_policy?${mp}`),
-    ebayRequest(accessToken, "GET", `${EBAY_ACC_BASE}/return_policy?${mp}`),
-  ]);
+  // This used to be a single, unretried attempt — any brief hiccup on any
+  // of the three policy fetches got reported as "your account is missing
+  // a business policy," even for an account (like this one) that's
+  // successfully published for hours. Retry the whole batch once before
+  // concluding anything is actually missing.
+  let ful: EbayResp, pay: EbayResp, ret: EbayResp;
+  let fulfillmentPolicyId = "";
+  let paymentPolicyId = "";
+  let returnPolicyId = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    [ful, pay, ret] = await Promise.all([
+      ebayRequest(accessToken, "GET", `${EBAY_ACC_BASE}/fulfillment_policy?${mp}`),
+      ebayRequest(accessToken, "GET", `${EBAY_ACC_BASE}/payment_policy?${mp}`),
+      ebayRequest(accessToken, "GET", `${EBAY_ACC_BASE}/return_policy?${mp}`),
+    ]);
+    fulfillmentPolicyId = pickNamedFulfillmentPolicy(ful);
+    paymentPolicyId = pickFirstPolicy(pay, "paymentPolicies", "paymentPolicyId");
+    returnPolicyId = pickFirstPolicy(ret, "returnPolicies", "returnPolicyId");
+    if (fulfillmentPolicyId && paymentPolicyId && returnPolicyId) break;
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 1200));
+  }
   return {
-    fulfillmentPolicyId: pickNamedFulfillmentPolicy(ful),
-    paymentPolicyId: pickFirstPolicy(pay, "paymentPolicies", "paymentPolicyId"),
-    returnPolicyId: pickFirstPolicy(ret, "returnPolicies", "returnPolicyId"),
+    fulfillmentPolicyId,
+    paymentPolicyId,
+    returnPolicyId,
     locationKey: await fetchOrCreateLocation(accessToken),
   };
 }
