@@ -321,12 +321,18 @@ export function ListingCard({
                 <div className="v">{listing.brand}</div>
               </div>
             )}
-            {listing.size && (
-              <div className="stat">
-                <div className="k">Size</div>
-                <div className="v">{listing.size}</div>
-              </div>
-            )}
+            <div className="stat editable">
+              <label className="k" htmlFor={`size-${group.id}`}>
+                Size
+              </label>
+              <input
+                id={`size-${group.id}`}
+                type="text"
+                value={listing.size || ""}
+                placeholder="e.g. XL, 32x30, 18"
+                onChange={(e) => onEdit(group.id, { size: e.target.value })}
+              />
+            </div>
           </div>
 
           {/* Condition Notes — editable */}
