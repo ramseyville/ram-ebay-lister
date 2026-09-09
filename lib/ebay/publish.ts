@@ -1740,11 +1740,19 @@ export async function publishListing(
   let catId: string = hasSpecificMapping ? staticCat : leaf || staticCat;
 
   if (!setup.fulfillmentPolicyId || !setup.paymentPolicyId || !setup.returnPolicyId) {
+    const missing: string[] = [];
+    if (!setup.fulfillmentPolicyId) missing.push("shipping (fulfillment)");
+    if (!setup.paymentPolicyId) missing.push("payment");
+    if (!setup.returnPolicyId) missing.push("returns");
     return {
       success: false,
       sku,
       error:
-        "Your eBay account is missing a business policy (payment, shipping, or returns). Set these up in eBay → Account → Business policies, then try again.",
+        `Your eBay account setup couldn't find a ${missing.join(" and ")} policy. ` +
+        (missing.includes("shipping (fulfillment)")
+          ? `For shipping specifically: this app looks for a policy by exact name — "Calculated:USPS GAdv, USPS Priority" — so if that policy was renamed, deleted, or its name format changed on eBay's side, it won't be found even though other policies exist. `
+          : "") +
+        "Check eBay → Account → Business policies to confirm it's still there under that name, then try again.",
     };
   }
 
