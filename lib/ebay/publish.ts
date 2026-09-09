@@ -563,17 +563,14 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
   // listing.size every time, deriving directly from that one proven
   // source removes the AI-reliability question for these two fields
   // entirely, rather than hoping a second, redundant field agrees with it.
-  const isPantsForMeasurements =
-    PANTS_CATEGORIES.has(catKey) ||
-    catKey === "mens_pants" || catKey === "womens_pants" ||
-    catKey === "mens_jeans" || catKey === "womens_jeans" ||
-    catKey === "mens_shorts";
-  if (isPantsForMeasurements) {
-    const wl = /^(\d{2,3})\s*[xX]\s*(\d{2,3})/.exec(String(listing.size || "").trim());
-    if (wl) {
-      aspects["Waist Size"] = [wl[1]];
-      aspects["Inseam"] = [wl[2]];
-    }
+  // Detect the waist×inseam pattern directly, same reasoning as the Size
+  // extraction above — the category classification isn't a reliable gate
+  // for this, the string format itself already tells us unambiguously
+  // what this is.
+  const wl = /^(\d{2,3})\s*[xX]\s*(\d{2,3})/.exec(String(listing.size || "").trim());
+  if (wl) {
+    aspects["Waist Size"] = [wl[1]];
+    aspects["Inseam"] = [wl[2]];
   }
 
   // Dress shirts use neck×sleeve sizing ("19 36/37", "18 1/2 - 36/37") —
@@ -692,15 +689,16 @@ function sizeCandidates(rawSize: string, catKey: string): string[] {
 
   const base = base0;
 
-  const isPantsCat =
-    PANTS_CATEGORIES.has(catKey) ||
-    catKey === "mens_pants" || catKey === "womens_pants" ||
-    catKey === "mens_jeans" || catKey === "womens_jeans" ||
-    catKey === "mens_shorts";
-  if (isPantsCat) {
-    const wm = /^(\d{2,3})\s*[xX]\s*\d{2,3}/.exec(base);
-    if (wm) return [wm[1]];
-  }
+  // Detect the pattern itself rather than gate on category classification.
+  // A string like "29x31" is unambiguous — that format only ever means
+  // waist-by-inseam, regardless of what category the AI happened to
+  // assign. Gating this behind an exact catKey match was the actual bug:
+  // if classification landed on anything other than the few expected
+  // pants values (the same kind of miscategorization that sent a sweater
+  // to "Casual Button-Down Shirts" earlier tonight), this extraction never
+  // ran at all, and the raw combined string went to eBay unchanged.
+  const waistInseamMatch = /^(\d{2,3})\s*[xX]\s*\d{2,3}/.exec(base);
+  if (waistInseamMatch) return [waistInseamMatch[1]];
 
   const out: string[] = [];
   const push = (v: string) => {
