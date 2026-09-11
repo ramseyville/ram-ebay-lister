@@ -22,7 +22,14 @@ import { estimateShipping } from "@/lib/shipping";
 
 const CATEGORY_MAP: Record<string, string> = {
   womens_top: "15724", womens_dress: "63861", womens_skirt: "11554",
-  womens_pants: "57988", womens_coat: "57990", womens_sweater: "63864",
+  womens_pants: "57988", womens_coat: "57990",
+  // Confirmed via six independent live eBay listing URLs (all showing
+  // "/Womens-Sweaters/63866/...") that 63866 is the real category — this
+  // was previously "63864," off by two and pointing somewhere else
+  // entirely, which is what routed a fleece pullover into a category
+  // requiring "Skirt Length" even after correctly classifying it as a
+  // sweater.
+  womens_sweater: "63866",
   womens_jeans: "11554", womens_clothing: "15724", womens_shoes: "3034",
   mens_top: "57991", mens_pants: "57989", mens_coat: "57988",
   mens_sweater: "11484", mens_jeans: "11483", mens_clothing: "1059",
