@@ -1702,8 +1702,32 @@ export async function publishListing(
   input: PublishInput
 ): Promise<PublishResult> {
   const { sku, listing } = input;
-  const catKey = String(listing.category || "other");
-  const { categoryId: staticCat, fallbacks } = resolveCategory(listing);
+  let catKey = String(listing.category || "other");
+  // Safety net: prompt guidance alone has proven insufficient to stop
+  // clothing items occasionally getting classified as the generic
+  // catch-all ("other"/"hard_goods") — confirmed directly, twice in a
+  // row, on a Nike fleece pullover. When that happens, the item falls
+  // through to eBay's live title-based category suggester, which can
+  // itself misfire on unrelated keywords ("Cropped" reading as skirt-
+  // related) and land somewhere completely wrong. If the title contains
+  // strong, unambiguous top/sweater keywords despite an "other"/
+  // "hard_goods" classification, override to the correct clothing
+  // category deterministically rather than trust either the model's
+  // classification or eBay's fuzzy suggester in this specific gap.
+  if (catKey === "other" || catKey === "hard_goods") {
+    const titleUpper = String(listing.title || "").toUpperCase();
+    const isTopKeyword =
+      /\b(PULLOVER|HALF[\s-]?ZIP|QUARTER[\s-]?ZIP|1\/4\s?ZIP|1\/2\s?ZIP|FLEECE|HOODIE|SWEATSHIRT|CREWNECK|CREW\s?NECK)\b/.test(
+        titleUpper
+      );
+    if (isTopKeyword) {
+      const isWomens = /\bWOMEN'?S\b/.test(titleUpper) || /\bWOMEN'?S\b/.test(String(listing.item_specifics?.Department || "").toUpperCase());
+      catKey = isWomens ? "womens_sweater" : "mens_sweater";
+    }
+  }
+  const { categoryId: staticCat, fallbacks } = resolveCategory(
+    catKey !== listing.category ? { ...listing, category: catKey } : listing
+  );
   // Trust our own category classification (from the AI's deliberate,
   // considered read of the item) FIRST when we have a real mapping for it.
   // This used to be reversed — eBay's dynamic title-keyword suggestion ran
