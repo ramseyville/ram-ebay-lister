@@ -998,20 +998,7 @@ function reconcileAspects(
         // still accept beats a guaranteed "missing field" error.
         (!a.values.length ? defaultValue : "") ||
         "";
-      // Size Type specifically: never proactively submit "Regular." eBay
-      // has directly confirmed this exact combination can be rejected
-      // ("Regular is not a valid Size Type for the Size 35") for reasons
-      // that plain value-existence matching can't predict ahead of time —
-      // "Regular" is a real, listed option in eBay's metadata, so every
-      // check above happily selects it, but the specific pairing with
-      // this size is what's actually invalid. Omitting the field lets
-      // eBay's own validator either accept the listing without it, or
-      // return a clear, differently-diagnosable "missing" error — either
-      // is better than guessing a value now confirmed to be sometimes
-      // actively wrong.
-      if (a.name === "Size Type" && canonical.toLowerCase() === "regular") {
-        delete aspects[a.name];
-      } else if (canonical) {
+      if (canonical) {
         aspects[a.name] = [canonical];
       } else if (!mustFill && current) {
         delete aspects[a.name];
@@ -1026,12 +1013,7 @@ function reconcileAspects(
           : ASPECT_DEFAULTS[a.name];
       const v = freeTextDefault(a.name, listing) || (useDefault ? defaultValue : "") || a.values[0] || "";
       const clipped = clipAspectValue(v);
-      // Same reasoning as above: never proactively write "Regular" for
-      // Size Type, since that specific combination has been confirmed
-      // rejected by eBay in ways this matching can't predict.
-      if (clipped && !(a.name === "Size Type" && clipped.toLowerCase() === "regular")) {
-        aspects[a.name] = [clipped];
-      }
+      if (clipped) aspects[a.name] = [clipped];
     }
   }
 }
@@ -1852,24 +1834,18 @@ export async function publishListing(
         "with non-standard size values. Please try posting again in a moment.",
     };
   }
-  // Guarantee Size Type is set for size-enforced categories — but ONLY
-  // when the size is genuinely extended (Big & Tall, Tall, Plus, Petite).
-  // This used to also force-fill "Regular" for standard sizes whenever
-  // nothing else had set it, on the theory that eBay's metadata being
-  // absent meant we needed to supply something. That's now confirmed
-  // actively wrong: eBay rejected a submission with the specific message
-  // "Regular is not a valid Size Type for the Size 33" — this category
-  // doesn't want Size Type populated with "Regular" for a standard size
-  // at all. For extended sizes we're confident forcing a real value is
-  // correct (confirmed multiple times tonight); for standard sizes,
-  // leave it unset and let eBay's own metadata-driven required-field
-  // logic in reconcileAspects decide whether this field applies here,
-  // rather than guessing "Regular" and risking exactly this rejection.
+  // Guarantee Size Type is set for size-enforced categories even if it's
+  // absent from eBay's metadata response entirely (reconcileAspects only
+  // handles it when eBay's metadata includes the field, even with an empty
+  // values list). Uses the same size-aware inference as reconcileAspects —
+  // NOT a flat "Regular," which is wrong for XXL+ / extended sizes. (A
+  // brief detour tonight tried excluding "Regular" here entirely after one
+  // rejected submission, but multiple live eBay listings confirm "Regular"
+  // is the correct, standard, widely-used value for ordinary jeans/pants
+  // sizes — that rejection had a different, category-specific cause, not
+  // a general problem with "Regular" itself.)
   if (SIZE_ENFORCED_CATEGORIES.has(catKey) && !aspects["Size Type"]?.length) {
-    const inferred = inferSizeType(String(listing.size || ""), catKey);
-    if (inferred.toLowerCase() !== "regular") {
-      aspects["Size Type"] = [inferred];
-    }
+    aspects["Size Type"] = [inferSizeType(String(listing.size || ""), catKey)];
   }
   // Hard invariant, independent of every path above: an extended size can
   // NEVER end up paired with Size Type "Regular." This is a genuine
