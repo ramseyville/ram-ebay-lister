@@ -998,7 +998,20 @@ function reconcileAspects(
         // still accept beats a guaranteed "missing field" error.
         (!a.values.length ? defaultValue : "") ||
         "";
-      if (canonical) {
+      // Size Type specifically: never proactively submit "Regular." eBay
+      // has directly confirmed this exact combination can be rejected
+      // ("Regular is not a valid Size Type for the Size 35") for reasons
+      // that plain value-existence matching can't predict ahead of time —
+      // "Regular" is a real, listed option in eBay's metadata, so every
+      // check above happily selects it, but the specific pairing with
+      // this size is what's actually invalid. Omitting the field lets
+      // eBay's own validator either accept the listing without it, or
+      // return a clear, differently-diagnosable "missing" error — either
+      // is better than guessing a value now confirmed to be sometimes
+      // actively wrong.
+      if (a.name === "Size Type" && canonical.toLowerCase() === "regular") {
+        delete aspects[a.name];
+      } else if (canonical) {
         aspects[a.name] = [canonical];
       } else if (!mustFill && current) {
         delete aspects[a.name];
@@ -1013,7 +1026,12 @@ function reconcileAspects(
           : ASPECT_DEFAULTS[a.name];
       const v = freeTextDefault(a.name, listing) || (useDefault ? defaultValue : "") || a.values[0] || "";
       const clipped = clipAspectValue(v);
-      if (clipped) aspects[a.name] = [clipped];
+      // Same reasoning as above: never proactively write "Regular" for
+      // Size Type, since that specific combination has been confirmed
+      // rejected by eBay in ways this matching can't predict.
+      if (clipped && !(a.name === "Size Type" && clipped.toLowerCase() === "regular")) {
+        aspects[a.name] = [clipped];
+      }
     }
   }
 }
