@@ -1141,7 +1141,7 @@ export async function updateOfferPrice(
     extraHeaders: CL,
   });
   if (![200, 201, 204].includes(upd.status)) {
-    return { success: false, error: `eBay rejected the price update (${upd.status}): ${upd.text.slice(0, 200)}` };
+    return { success: false, error: `eBay rejected the price update (${upd.status}): ${upd.text.slice(0, 1800)}` };
   }
 
   // If the offer is already published, the update above only changes the
@@ -1156,7 +1156,7 @@ export async function updateOfferPrice(
     if (!pub.ok) {
       return {
         success: false,
-        error: `Price saved but republish failed (${pub.status}): ${pub.text.slice(0, 200)}`,
+        error: `Price saved but republish failed (${pub.status}): ${pub.text.slice(0, 1800)}`,
       };
     }
   }
@@ -1216,7 +1216,7 @@ export async function updateOfferQuantity(
   if (![200, 201, 204].includes(upd.status)) {
     return {
       success: false,
-      error: `eBay rejected the quantity update (${upd.status}): ${upd.text.slice(0, 200)}`,
+      error: `eBay rejected the quantity update (${upd.status}): ${upd.text.slice(0, 1800)}`,
     };
   }
 
@@ -1238,7 +1238,7 @@ export async function updateOfferQuantity(
     if (!pub.ok) {
       return {
         success: false,
-        error: `Quantity saved but republish failed (${pub.status}): ${pub.text.slice(0, 200)}`,
+        error: `Quantity saved but republish failed (${pub.status}): ${pub.text.slice(0, 1800)}`,
       };
     }
   }
@@ -1296,7 +1296,7 @@ export async function withdrawOffer(
       success: false,
       offerId: offer.offerId,
       wasLive: true,
-      error: `Could not withdraw SKU "${sku}" (${withdraw.status}): ${withdraw.text.slice(0, 200)}`,
+      error: `Could not withdraw SKU "${sku}" (${withdraw.status}): ${withdraw.text.slice(0, 1800)}`,
     };
   }
   return { success: true, offerId: offer.offerId, wasLive: true };
@@ -1312,7 +1312,7 @@ export async function republishOffer(
   if (!pub.ok) {
     return {
       success: false,
-      error: `Republish failed (${pub.status}): ${pub.text.slice(0, 200)}`,
+      error: `Republish failed (${pub.status}): ${pub.text.slice(0, 1800)}`,
     };
   }
   return { success: true };
@@ -2071,7 +2071,7 @@ export async function publishListing(
       }
     }
     if (![200, 201, 204].includes(r.status)) {
-      return { success: false, sku, error: `Inventory item failed (${r.status}): ${r.text.slice(0, 300)}` };
+      return { success: false, sku, error: `Inventory item failed (${r.status}): ${r.text.slice(0, 1800)}` };
     }
   }
 
@@ -2154,7 +2154,7 @@ export async function publishListing(
   if (r.status === 400) {
     const existing = extractExistingOfferId(r);
     if (!existing) {
-      return { success: false, sku, error: `Offer creation failed (${r.status}): ${r.text.slice(0, 300)}` };
+      return { success: false, sku, error: `Offer creation failed (${r.status}): ${r.text.slice(0, 1800)}` };
     }
     // Update the pre-existing offer instead.
     const upd = await ebayRequest(accessToken, "PUT", `${EBAY_INV_BASE}/offer/${existing}`, {
@@ -2162,11 +2162,11 @@ export async function publishListing(
       extraHeaders: CL,
     });
     if (![200, 201, 204].includes(upd.status)) {
-      return { success: false, sku, error: `Offer update failed (${upd.status}): ${upd.text.slice(0, 300)}` };
+      return { success: false, sku, error: `Offer update failed (${upd.status}): ${upd.text.slice(0, 1800)}` };
     }
     offerId = existing;
   } else if (![200, 201].includes(r.status)) {
-    return { success: false, sku, error: `Offer creation failed (${r.status}): ${r.text.slice(0, 300)}` };
+    return { success: false, sku, error: `Offer creation failed (${r.status}): ${r.text.slice(0, 1800)}` };
   } else {
     offerId = r.json?.offerId || "";
   }
@@ -2339,7 +2339,7 @@ async function publishOfferWithRecovery(
     success: false,
     sku,
     offerId,
-    error: `Publish failed (${r.status}): ${r.text.slice(0, 300)}`,
+    error: `Publish failed (${r.status}): ${r.text.slice(0, 1800)}`,
   };
 }
 
