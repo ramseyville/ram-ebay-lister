@@ -1834,13 +1834,24 @@ export async function publishListing(
         "with non-standard size values. Please try posting again in a moment.",
     };
   }
-  // Guarantee Size Type is set for size-enforced categories even if it's
-  // absent from eBay's metadata response entirely (reconcileAspects only
-  // handles it when eBay's metadata includes the field, even with an empty
-  // values list). Uses the same size-aware inference as reconcileAspects —
-  // NOT a flat "Regular," which is wrong for XXL+ / extended sizes.
+  // Guarantee Size Type is set for size-enforced categories — but ONLY
+  // when the size is genuinely extended (Big & Tall, Tall, Plus, Petite).
+  // This used to also force-fill "Regular" for standard sizes whenever
+  // nothing else had set it, on the theory that eBay's metadata being
+  // absent meant we needed to supply something. That's now confirmed
+  // actively wrong: eBay rejected a submission with the specific message
+  // "Regular is not a valid Size Type for the Size 33" — this category
+  // doesn't want Size Type populated with "Regular" for a standard size
+  // at all. For extended sizes we're confident forcing a real value is
+  // correct (confirmed multiple times tonight); for standard sizes,
+  // leave it unset and let eBay's own metadata-driven required-field
+  // logic in reconcileAspects decide whether this field applies here,
+  // rather than guessing "Regular" and risking exactly this rejection.
   if (SIZE_ENFORCED_CATEGORIES.has(catKey) && !aspects["Size Type"]?.length) {
-    aspects["Size Type"] = [inferSizeType(String(listing.size || ""), catKey)];
+    const inferred = inferSizeType(String(listing.size || ""), catKey);
+    if (inferred.toLowerCase() !== "regular") {
+      aspects["Size Type"] = [inferred];
+    }
   }
   // Hard invariant, independent of every path above: an extended size can
   // NEVER end up paired with Size Type "Regular." This is a genuine
