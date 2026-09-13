@@ -1586,6 +1586,7 @@ async function uploadPhoto(
 
 export interface AccountSetup {
   fulfillmentPolicyId: string;
+  fragrancePolicyId: string;
   paymentPolicyId: string;
   returnPolicyId: string;
   locationKey: string;
@@ -1599,6 +1600,16 @@ export interface AccountSetup {
 // whatever policy the API happens to list first — which is how this
 // defaulted to the wrong shipping policy in the first place.
 const FULFILLMENT_POLICY_NAME = "Calculated:USPS GAdv, USPS Priority";
+
+// eBay treats fragrances (cologne, perfume, aftershave — anything with
+// flammable alcohol) as hazmat-restricted: they can ONLY ship via USPS
+// Ground Advantage, no other service. The standard policy above offers
+// multiple services and gets the whole listing rejected outright for these
+// items (confirmed directly: errorId 25019,
+// PI_Haz_US_Shipping_Service_Fragrance_Block). This dedicated,
+// Ground-Advantage-only policy is used instead whenever an item is
+// detected as a fragrance.
+const FRAGRANCE_FULFILLMENT_POLICY_NAME = "USPS Ground Advantage Only";
 
 function normalizePolicyName(name: string): string {
   return name
@@ -1614,14 +1625,29 @@ function pickFirstPolicy(r: EbayResp, listKey: string, idField: string): string 
   return list.length ? String(list[0][idField] || "") : "";
 }
 
-function pickNamedFulfillmentPolicy(r: EbayResp): string {
+function pickNamedFulfillmentPolicy(r: EbayResp, targetName: string, fallbackToFirst = true): string {
   if (!r.ok) return "";
   const list: any[] = r.json?.fulfillmentPolicies || [];
-  const target = normalizePolicyName(FULFILLMENT_POLICY_NAME);
-  // Prefer the named policy (normalized match); fall back to first in list.
+  const target = normalizePolicyName(targetName);
+  // Prefer the named policy (normalized match); fall back to first in list
+  // ONLY for the primary policy — the fragrance policy has no sensible
+  // fallback, since "just pick some other shipping policy" for a hazmat-
+  // restricted item risks the exact rejection this exists to avoid.
   const match = list.find((p) => normalizePolicyName(p.name || "") === target);
-  const chosen = match || list[0];
+  const chosen = match || (fallbackToFirst ? list[0] : null);
   return chosen ? String(chosen.fulfillmentPolicyId || "") : "";
+}
+
+// Detects fragrance/cologne/perfume items that need the Ground-Advantage-
+// only policy. Checks both the category (health_beauty) and title keywords,
+// since not every health_beauty item is a fragrance (body wash, skincare,
+// etc. ship normally) but fragrances specifically carry the hazmat
+// restriction regardless of exactly which category they landed in.
+function isFragranceItem(listing: ListingResult): boolean {
+  const titleUpper = String(listing.title || "").toUpperCase();
+  return /\b(COLOGNE|PERFUME|EAU DE (TOILETTE|PARFUM|COLOGNE)|EDT|EDP|FRAGRANCE|AFTERSHAVE|AFTER SHAVE|BODY SPRAY)\b/.test(
+    titleUpper
+  );
 }
 
 export async function fetchAccountSetup(accessToken: string): Promise<AccountSetup> {
@@ -1633,6 +1659,7 @@ export async function fetchAccountSetup(accessToken: string): Promise<AccountSet
   // concluding anything is actually missing.
   let ful: EbayResp, pay: EbayResp, ret: EbayResp;
   let fulfillmentPolicyId = "";
+  let fragrancePolicyId = "";
   let paymentPolicyId = "";
   let returnPolicyId = "";
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -1641,7 +1668,10 @@ export async function fetchAccountSetup(accessToken: string): Promise<AccountSet
       ebayRequest(accessToken, "GET", `${EBAY_ACC_BASE}/payment_policy?${mp}`),
       ebayRequest(accessToken, "GET", `${EBAY_ACC_BASE}/return_policy?${mp}`),
     ]);
-    fulfillmentPolicyId = pickNamedFulfillmentPolicy(ful);
+    fulfillmentPolicyId = pickNamedFulfillmentPolicy(ful, FULFILLMENT_POLICY_NAME, true);
+    // No fallback-to-first here — both come from the same response, so
+    // this doesn't cost another retry round if it's missing.
+    fragrancePolicyId = pickNamedFulfillmentPolicy(ful, FRAGRANCE_FULFILLMENT_POLICY_NAME, false);
     paymentPolicyId = pickFirstPolicy(pay, "paymentPolicies", "paymentPolicyId");
     returnPolicyId = pickFirstPolicy(ret, "returnPolicies", "returnPolicyId");
     if (fulfillmentPolicyId && paymentPolicyId && returnPolicyId) break;
@@ -1649,6 +1679,7 @@ export async function fetchAccountSetup(accessToken: string): Promise<AccountSet
   }
   return {
     fulfillmentPolicyId,
+    fragrancePolicyId,
     paymentPolicyId,
     returnPolicyId,
     locationKey: await fetchOrCreateLocation(accessToken),
@@ -2143,7 +2174,17 @@ export async function publishListing(
     categoryId: catId,
     merchantLocationKey: setup.locationKey,
     listingPolicies: {
-      fulfillmentPolicyId: setup.fulfillmentPolicyId,
+      // Fragrances are hazmat-restricted to USPS Ground Advantage only —
+      // the standard multi-service policy gets the listing rejected
+      // outright. Fall back to the standard policy if the dedicated one
+      // isn't found, rather than fail the listing entirely over a missing
+      // secondary policy — better to risk the original hazmat rejection
+      // (which at least surfaces a clear, actionable error) than block
+      // publishing altogether.
+      fulfillmentPolicyId:
+        isFragranceItem(listing) && setup.fragrancePolicyId
+          ? setup.fragrancePolicyId
+          : setup.fulfillmentPolicyId,
       paymentPolicyId: setup.paymentPolicyId,
       returnPolicyId: setup.returnPolicyId,
       ...(isPromoted
