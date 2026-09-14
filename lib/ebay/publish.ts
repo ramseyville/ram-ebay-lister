@@ -2097,6 +2097,14 @@ export async function publishListing(
     }
   } // end outer if (ebayTitle.length < 77)
 
+  // eBay's own filter (SPx_ItemConditionField_IrrelventTerms) rejects any
+  // pricing/promotional language in the condition field outright —
+  // confirmed directly on a listing mentioning "$28.00 price sticker."
+  // The prompt now avoids this at the source, but strip any dollar amount
+  // that slips through anyway as a cheap backstop, rather than let a
+  // single stray price mention block the whole listing.
+  const cleanConditionNotes = (listing.condition_notes || "").replace(/\$\d[\d,]*(\.\d{2})?/g, "").replace(/\s{2,}/g, " ").trim();
+
   const inventoryItem: any = {
     product: {
       title: ebayTitle,
@@ -2105,7 +2113,7 @@ export async function publishListing(
       imageUrls: photoUrls.slice(0, 12),
     },
     condition,
-    conditionDescription: listing.condition_notes || "",
+    conditionDescription: cleanConditionNotes,
     availability: { shipToLocationAvailability: { quantity: 1 } },
     packageWeightAndSize,
   };
