@@ -237,7 +237,7 @@ Return ONLY valid JSON — no markdown, no code fences, no explanation:
   "color": "Primary color(s)",
   "material": "Fabric content exactly as printed on the tag — e.g. '100% Cotton', '55% Supima Cotton 45% Polyester'. If not visible on any tag in the photos, write the primary fiber only if you can confidently determine it from context (e.g. '100% Cotton' for a clearly cotton item). NEVER write 'See tag', 'not visible', instruction text, or sentences with dashes. If truly unknown, leave blank.",
   "condition": "NEW_WITH_TAGS|NEW_NO_TAGS|EXCELLENT|VERY_GOOD|GOOD",
-  "condition_notes": "Specific flaw details by location, or explicit confirmation of no flaws",
+  "condition_notes": "Specific flaw details by location, or explicit confirmation of no flaws. NEVER include a dollar amount, retail price, or price sticker value here — even when describing a visible price tag as part of the item's condition, describe it without the figure (e.g. \"original price sticker still attached\" not \"original $28.00 price sticker attached\"). eBay's own filter specifically flags pricing/promotional language in this field as irrelevant to condition and will reject the listing outright. If retail price is worth mentioning at all, that belongs in the description, never here.",
   "suggested_price": "NEEDS_RESEARCH",
   "description": "Full HTML description per 8-section structure",
   "measurements": "Formatted measurement string",
