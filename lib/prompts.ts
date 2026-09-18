@@ -148,7 +148,11 @@ KEYWORD STRATEGY — titles must be built from high-search-volume terms in this 
    second, conflicting item-type phrase from the list to pad length.
 
 5. KEY DESCRIPTORS in order of search volume:
-   - Color: most-searched color term ("Navy Blue" > "Navy" | "Heather Gray" > "Gray")
+   - Color: most-searched color term. Specifically: "Navy" alone is NEVER acceptable in a title —
+     always write "Navy Blue" (both words together). "Blue" alone gets meaningfully more search
+     volume than "Navy" alone, and "Navy Blue" captures both terms at once, so this isn't optional
+     stylistic preference — treat it as a hard rule, the same way a banned filler word is a hard
+     rule. Apply the same "most-searched pairing" logic elsewhere too ("Heather Gray" > "Gray").
    - Size: exactly as on tag ("XL" | "Large" | "32x34" | "32")
    - Material/tech: only if high-value search term ("Performance" | "Stretch" | "Cotton" |
      "Linen" | "Merino Wool" | "Moisture Wicking" | "UPF 50")
