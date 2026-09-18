@@ -247,6 +247,19 @@ export async function POST(req: NextRequest) {
         const listing = parseModelJson<ListingResult>(rawText);
         listing.item_profile = profile;
         await repairTitleLength(client, listing);
+        // Deterministic backstop: the prompt instructs "Navy Blue" over
+        // bare "Navy" (Blue gets meaningfully more search volume alone),
+        // but that instruction alone hasn't been reliably followed. Fix it
+        // here regardless of what the model produced — but only if it
+        // still fits the hard 77-80 char title protocol; the length rule
+        // takes precedence over this SEO improvement in the rare case
+        // both can't be satisfied at once.
+        if (listing.title) {
+          const withNavyBlue = listing.title.replace(/\bNavy\b(?!\s+Blue\b)/gi, (m) => `${m} Blue`);
+          if (withNavyBlue !== listing.title && withNavyBlue.length <= 80) {
+            listing.title = withNavyBlue;
+          }
+        }
         // Return token usage so the client can track cost per listing.
         const usage = {
           input_tokens: finalResp.usage?.input_tokens ?? 0,
