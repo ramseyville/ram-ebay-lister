@@ -591,8 +591,15 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
   // start with a number but mean something entirely different.
   const isShirtCat = catKey === "mens_top" || catKey === "womens_top" || catKey === "mens_clothing" || catKey === "womens_clothing";
   const rawSizeForShirt = String(listing.size || "").trim();
+  // CRITICAL: (?![A-Za-z]) immediately after the leading digits — without
+  // this, the regex (no end anchor) happily matched just the leading digit
+  // of an extended size like "3XL" or "4XLT" and silently discarded the
+  // rest, submitting a bare "3" or "4" as Size. Confirmed directly: every
+  // Big & Tall polo shirt classified under mens_top was hitting this,
+  // since 3XL/4XLT genuinely start with a digit too, and this shirt-
+  // specific parsing was never meant to apply to them at all.
   const shirtMatch = isShirtCat
-    ? /^(\d{1,2})(\.5)?\s*(?:(1\/2)\s*)?[-–]?\s*(\d{2}\/\d{2})?/.exec(rawSizeForShirt)
+    ? /^(\d{1,2})(?![A-Za-z])(\.5)?\s*(?:(1\/2)\s*)?[-–]?\s*(\d{2}\/\d{2})?/.exec(rawSizeForShirt)
     : null;
   if (shirtMatch) {
     const neck = shirtMatch[2] || shirtMatch[3] ? `${shirtMatch[1]}.5` : shirtMatch[1];
