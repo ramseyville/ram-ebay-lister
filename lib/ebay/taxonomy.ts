@@ -141,7 +141,11 @@ const condCache = new Map<string, Set<number>>();
 export async function acceptedConditionIds(categoryId: string): Promise<Set<number>> {
   if (!categoryId) return new Set();
   const cached = condCache.get(categoryId);
-  if (cached) return cached;
+  // Same bug as categoryAspects had earlier: an empty Set is truthy in JS,
+  // so `if (cached)` was treating "we cached nothing" the same as "we
+  // cached a real result" — permanently serving an empty set after any
+  // transient failure, for the life of the warm server instance.
+  if (cached && cached.size) return cached;
   try {
     const token = await appToken();
     const url =
@@ -162,7 +166,8 @@ export async function acceptedConditionIds(categoryId: string): Promise<Set<numb
         const n = Number(c?.conditionId);
         if (n) ids.add(n);
       }
-    condCache.set(categoryId, ids);
+    // Only cache a non-empty result, same reasoning as categoryAspects.
+    if (ids.size) condCache.set(categoryId, ids);
     return ids;
   } catch {
     return new Set();
