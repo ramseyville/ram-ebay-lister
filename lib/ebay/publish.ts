@@ -22,6 +22,9 @@ import { estimateShipping } from "@/lib/shipping";
 
 const CATEGORY_MAP: Record<string, string> = {
   womens_top: "15724", womens_dress: "63861", womens_skirt: "11554",
+  // Confirmed via live eBay listing URLs - a distinct category from
+  // generic Tops/Dress Shirts, with its own Size Type taxonomy.
+  womens_polo: "53159",
   womens_pants: "57988", womens_coat: "57990",
   // Confirmed via six independent live eBay listing URLs (all showing
   // "/Womens-Sweaters/63866/...") that 63866 is the real category — this
@@ -32,6 +35,12 @@ const CATEGORY_MAP: Record<string, string> = {
   womens_sweater: "63866",
   womens_jeans: "11554", womens_clothing: "15724", womens_shoes: "3034",
   mens_top: "57991", mens_pants: "57989", mens_coat: "57988",
+  // Confirmed via multiple live eBay listing URLs — polos are a
+  // dedicated, separate category from Dress Shirts, with their own Size
+  // Type taxonomy. This mismatch (mens_top defaulting to Dress Shirts)
+  // was the real cause behind a run of Size Type rejections on Big & Tall
+  // polo shirts that looked like eBay inconsistency but wasn't.
+  mens_polo: "185101",
   mens_sweater: "11484", mens_jeans: "11483", mens_clothing: "1059",
   mens_shoes: "93427", handbag: "169291", wallet: "2996", jewelry: "281",
   scarf: "45238", belt: "2996", sunglasses: "79720", hat: "52382", mens_tie: "15662",
@@ -1768,6 +1777,20 @@ export async function publishListing(
     if (isTopKeyword) {
       const isWomens = /\bWOMEN'?S\b/.test(titleUpper) || /\bWOMEN'?S\b/.test(String(listing.item_specifics?.Department || "").toUpperCase());
       catKey = isWomens ? "womens_sweater" : "mens_sweater";
+    }
+  }
+  // Polos are a genuinely separate eBay category from generic Tops/Dress
+  // Shirts, with their own Size Type taxonomy — confirmed directly (a
+  // Big & Tall polo classified as mens_top, and routed to Dress Shirts by
+  // default, had BOTH "Tall" and "Big & Tall" rejected as Size Type,
+  // because the whole category was wrong, not either candidate value).
+  // Unlike the catch-all fix above, this applies even when the item was
+  // already correctly classified as mens_top/womens_top — that
+  // classification just isn't specific enough for polos.
+  if (catKey === "mens_top" || catKey === "womens_top") {
+    const titleUpper = String(listing.title || "").toUpperCase();
+    if (/\bPOLO\b/.test(titleUpper)) {
+      catKey = catKey === "womens_top" ? "womens_polo" : "mens_polo";
     }
   }
   const { categoryId: staticCat, fallbacks } = resolveCategory(
