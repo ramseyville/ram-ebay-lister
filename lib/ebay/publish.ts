@@ -17,6 +17,22 @@ import {
 } from "./taxonomy";
 import type { ListingResult } from "@/lib/types";
 import { estimateShipping } from "@/lib/shipping";
+import {
+  APPAREL_CATEGORIES,
+  PANTS_CATEGORIES,
+  TOPS_CATEGORIES,
+  SIZE_ENFORCED_CATEGORIES,
+  cleanSizeBase,
+  sizeParts,
+  isExtendedSize,
+  sizeTypeCandidates,
+  inferSizeType,
+  normalizeExtendedSize,
+  sizeCandidates,
+  looksLikeSizeCode,
+  sizeAspectValue,
+  isFragranceItem,
+} from "./size-logic";
 
 // ── Constants (from the Python script) ───────────────────────────────────────
 
@@ -151,36 +167,16 @@ const APPAREL_CONDITION_ID_PREFERENCES: Record<string, number[]> = {
 const GENERAL_SAFE_CONDITION_IDS = [3000, 4000, 5000, 6000, 2750, 1500, 1000, 1750, 7000];
 const APPAREL_SAFE_CONDITION_IDS = [3000, 2990, 3010, 1500, 1000, 1750];
 
-const APPAREL_CATEGORIES = new Set([
-  "womens_top", "womens_dress", "womens_skirt", "womens_pants", "womens_coat",
-  "womens_sweater", "womens_jeans", "womens_clothing", "womens_shoes", "mens_top",
-  "mens_pants", "mens_coat", "mens_sweater", "mens_jeans", "mens_clothing",
-  "mens_shoes", "scarf", "belt", "hat", "mens_polo", "womens_polo",
-]);
-const PANTS_CATEGORIES = new Set([
-  "womens_pants", "womens_jeans", "womens_skirt", "mens_pants", "mens_jeans",
-]);
 
 const OUTERWEAR_CATEGORIES = new Set([
   "mens_coat", "mens_jacket", "womens_coat", "womens_jacket",
 ]);
 
-const TOPS_CATEGORIES = new Set([
-  "mens_top", "womens_top", "mens_sweater", "womens_sweater", "mens_clothing", "womens_clothing",
-  "mens_polo", "womens_polo",
-]);
 
 // Categories where eBay's Aug/Sept 2026 standardized-size enforcement
 // applies (Apparel and Footwear) — same set as the Size Type gate below,
 // pulled out as its own constant since it's also used to decide whether a
 // taxonomy-fetch failure should hard-block a publish (see publishListing).
-const SIZE_ENFORCED_CATEGORIES = new Set([
-  "mens_top", "mens_pants", "mens_shorts", "mens_jacket", "mens_coat",
-  "mens_sweater", "mens_jeans", "mens_shoes", "mens_clothing", "mens_polo",
-  "womens_top", "womens_pants", "womens_jacket", "womens_coat",
-  "womens_sweater", "womens_jeans", "womens_dress", "womens_skirt",
-  "womens_shoes", "womens_clothing", "womens_polo",
-]);
 // relevant category. Prevents "Hood: No Hood" on dress shirts, "Rise: Mid Rise"
 // on jackets, "Leg Style: Straight" on tops, etc.
 // Map of aspect name → set of category keys where the default is appropriate.
@@ -240,13 +236,6 @@ const ASPECT_CATEGORY_GATES: Record<string, Set<string>> = {
 // itself was already correctly reduced to "XLT". Matches none of the Tall
 // patterns, Size Type silently defaults to "Regular" — an invalid pairing
 // with XLT. One shared function means this can't drift out of sync again.
-function cleanSizeBase(rawSize: string): string {
-  let base = (rawSize || "").trim();
-  base = base.replace(/\s*\([^)]*\)\s*$/, ""); // strip parenthetical explanations
-  if (/^O\/?S$/i.test(base)) return base; // "O/S" isn't bilingual — leave it alone here
-  base = base.split("/")[0].trim(); // strip bilingual/dual-notation second half
-  return base;
-}
 
 // For DETECTING signals (is this extended? what type?), a "/" could mean
 // two different things depending on context — bilingual duplicate notation
@@ -257,34 +246,7 @@ function cleanSizeBase(rawSize: string): string {
 // side. (Choosing which single VALUE to actually submit is a different
 // question, handled separately by sizeCandidates/cleanSizeBase, which
 // correctly does commit to the first/English part.)
-function sizeParts(rawSize: string): string[] {
-  const raw = (rawSize || "").trim();
-  // The parenthetical is usually just an explanation safe to drop when
-  // picking a VALUE to submit ("XLT (XL Tall)" — the code alone is enough).
-  // But for DETECTION it can be the only place a signal appears at all
-  // ("18 1/2 - 36/37 (Big Man)" has no other hint of "Big" anywhere) — so
-  // it gets checked as its own part rather than discarded.
-  const parenMatch = /\(([^)]*)\)\s*$/.exec(raw);
-  const withoutParen = raw.replace(/\s*\([^)]*\)\s*$/, "");
-  const mainParts = withoutParen.split("/").map((p) => p.trim()).filter(Boolean);
-  return parenMatch && parenMatch[1].trim() ? [...mainParts, parenMatch[1].trim()] : mainParts;
-}
 
-function isExtendedSize(rawSize: string): boolean {
-  return sizeParts(rawSize).some((part) => {
-    const s = part.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (!s) return false;
-    if (/\d+X/.test(s)) return true; // "2X", "3XL", "4X"... any digit+X
-    if (/X{2,}/.test(s)) return true; // "XXL", "XXXL"... repeated X
-    if (/^(ST|MT|LT)$/.test(s)) return true; // bare tall codes
-    if (/X+LT$/.test(s)) return true; // "XLT", "2XLT"... tall-with-X codes
-    if (/BIG/.test(s)) return true; // "Big..." prefix OR "(Big Man)" mid-string
-    if (/TALL/.test(s)) return true; // the word, anywhere
-    if (/^P/.test(s) || /P$/.test(s)) return true; // petite markers
-    if (/^\d{2,3}W/.test(s)) return true; // women's numeric plus ("16W")
-    return false;
-  });
-}
 
 // Which Size Type actually pairs with an XLT-style code is NOT a fixed
 // answer — confirmed directly: a live, already-successful listing pairs
@@ -294,43 +256,7 @@ function isExtendedSize(rawSize: string): boolean {
 // Size Type and let the actual matching step check each against eBay's
 // real fetched values for THIS listing's category — same principle as
 // sizeCandidates for the Size value itself.
-function sizeTypeCandidates(rawSize: string, catKey: string): string[] {
-  const parts = sizeParts(rawSize).map((p) => p.toUpperCase().replace(/[^A-Z0-9]/g, ""));
-  if (!parts.length) return ["Regular"];
-  const isWomens = catKey.startsWith("womens_");
 
-  if (isWomens) {
-    if (parts.some((p) => /^[1-6]X$/.test(p) || /^(1[4-9]|[2-9]\d)W?$/.test(p))) return ["Plus"];
-    if (parts.some((p) => /^P/.test(p) || /P$/.test(p))) return ["Petite"];
-    return ["Regular"];
-  }
-
-  const isBigPattern = parts.some((p) => /^X{2,}L?B?$/.test(p) || /^[2-6]XL?B?$/.test(p));
-  const isTallPattern = parts.some((p) => /^(ST|MT|LT|X+LT|[2-6]XLT)$/.test(p));
-  // "3XT" (3X-Tall) and "4XB" (4X-Big) — the "L"-less abbreviation style,
-  // distinct from both "NXLT"/"NXLB" and bare "NX".
-  const isTallAbbrev = parts.some((p) => /^\dXT$/.test(p));
-  const isBigAbbrev = parts.some((p) => /^\dXB$/.test(p));
-  const hasBig = parts.some((p) => /BIG/.test(p));
-  const hasTall = parts.some((p) => /TALL/.test(p));
-
-  // Tall-coded items (XLT, 2XLT...) genuinely pair with either "Tall" or
-  // "Big & Tall" depending on category — try both.
-  if (isTallPattern || isTallAbbrev || hasTall) return ["Tall", "Big & Tall"];
-  if (isBigPattern || isBigAbbrev || hasBig) return ["Big & Tall", "Tall"];
-
-  const isPantsCat =
-    PANTS_CATEGORIES.has(catKey) || catKey === "mens_pants" || catKey === "mens_jeans" || catKey === "mens_shorts";
-  if (isPantsCat) {
-    const waistMatch = parts[0]?.match(/^(\d{2})/);
-    if (waistMatch && parseInt(waistMatch[1], 10) >= 44) return ["Big & Tall", "Tall"];
-  }
-  return ["Regular"];
-}
-
-function inferSizeType(rawSize: string, catKey: string): string {
-  return sizeTypeCandidates(rawSize, catKey)[0];
-}
 
 const ASPECT_DEFAULTS: Record<string, string> = {
   "Skirt Length": "Knee-Length", "Dress Length": "Knee-Length", Rise: "Mid Rise",
@@ -712,66 +638,6 @@ const SIZE_ALIASES: Record<string, string[]> = {
 // via eBay's own category browse facets), so a brand tag reading "3XLB"
 // could map to either depending on the specific category — only checking
 // against eBay's real list settles it, not assuming either one.
-function sizeCandidates(rawSize: string, catKey: string): string[] {
-  const base0 = cleanSizeBase(rawSize);
-
-  // "O/S" (One Size) has a slash too, but it's an abbreviation, not
-  // bilingual dual-notation — cleanSizeBase already leaves it untouched;
-  // recognize it here before treating it as a normal code.
-  if (/^O\/?S$/i.test(base0)) {
-    return ["One Size", "OS", "O/S"];
-  }
-
-  const base = base0;
-
-  // Detect the pattern itself rather than gate on category classification.
-  // A string like "29x31" is unambiguous — that format only ever means
-  // waist-by-inseam, regardless of what category the AI happened to
-  // assign. Gating this behind an exact catKey match was the actual bug:
-  // if classification landed on anything other than the few expected
-  // pants values (the same kind of miscategorization that sent a sweater
-  // to "Casual Button-Down Shirts" earlier tonight), this extraction never
-  // ran at all, and the raw combined string went to eBay unchanged.
-  const waistInseamMatch = /^(\d{2,3})\s*[xX]\s*\d{2,3}/.exec(base);
-  if (waistInseamMatch) return [waistInseamMatch[1]];
-
-  const out: string[] = [];
-  const push = (v: string) => {
-    if (v && !out.includes(v)) out.push(v);
-  };
-
-  // Push transforms FIRST, raw base LAST — matching order doesn't affect
-  // whether a real value gets found (every candidate gets tried either
-  // way), but it does determine what sizeAspectValue() picks as its single
-  // best guess when there's nothing real to check against. The raw brand
-  // code ("3XLB") is the least likely of the options to be a real eBay
-  // value, so it shouldn't be candidates[0].
-  let m = /^(\d)XLB?$/i.exec(base);
-  if (m) {
-    push(`${m[1]}XL`);
-    push(`Big ${m[1]}X`);
-    push(`${m[1]}X`);
-  }
-  m = /^(\d)X$/i.exec(base);
-  if (m) {
-    push(`${m[1]}XL`);
-    push(`Big ${m[1]}X`);
-  }
-  // "3XT" (3X-Tall, no "L") and "4XB" (4X-Big, no "L") — a third
-  // abbreviation style, distinct from both "NXLT"/"NXLB" and bare "NX".
-  m = /^(\d)XT$/i.exec(base);
-  if (m) {
-    push(`${m[1]}XLT`);
-  }
-  m = /^(\d)XB$/i.exec(base);
-  if (m) {
-    push(`${m[1]}XL`);
-    push(`Big ${m[1]}X`);
-    push(`${m[1]}X`);
-  }
-  push(base);
-  return out;
-}
 
 // Single best-guess fallback for when there's nothing real to check
 // against (eBay's values list came back empty) — the first, most literal
@@ -782,29 +648,8 @@ function sizeCandidates(rawSize: string, catKey: string): string[] {
 // has any concept of; submitting it as Size is a guaranteed rejection).
 // A real code either has a digit somewhere (neck sizes, waist, 2XL, 5X...)
 // or matches the known letter-size family (XS through XXXXL, one-size).
-function looksLikeSizeCode(cleaned: string): boolean {
-  if (!cleaned) return false;
-  if (/\d/.test(cleaned)) return true;
-  if (/^X{0,4}(S|L)$/.test(cleaned) || cleaned === "M" || cleaned === "OS") return true;
-  return false;
-}
 
-function sizeAspectValue(rawSize: string, catKey: string): string {
-  const candidates = sizeCandidates(rawSize, catKey);
-  const best = candidates[0] || (rawSize || "").trim();
-  const cleaned = best.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  // Not a real size code (e.g. "Big Man") — don't submit it. Better to
-  // leave the field for eBay's own required-field fallback to pick SOME
-  // valid option than guarantee a rejection with text that was never a
-  // size code in the first place. The actual size can be corrected on the
-  // live listing afterward once the real number is known.
-  return looksLikeSizeCode(cleaned) ? best : "";
-}
 
-function normalizeExtendedSize(size: string): string {
-  const m = /^([2-9])X$/i.exec((size || "").trim());
-  return m ? `${m[1]}XL` : size;
-}
 
 function matchAllowed(value: string, allowed: string[]): string | null {
   const ls = (value || "").trim().toLowerCase();
@@ -1671,12 +1516,6 @@ function pickNamedFulfillmentPolicy(r: EbayResp, targetName: string, fallbackToF
 // since not every health_beauty item is a fragrance (body wash, skincare,
 // etc. ship normally) but fragrances specifically carry the hazmat
 // restriction regardless of exactly which category they landed in.
-function isFragranceItem(listing: ListingResult): boolean {
-  const titleUpper = String(listing.title || "").toUpperCase();
-  return /\b(COLOGNE|PERFUME|EAU DE (TOILETTE|PARFUM|COLOGNE)|EDT|EDP|FRAGRANCE|AFTERSHAVE|AFTER SHAVE|BODY SPRAY)\b/.test(
-    titleUpper
-  );
-}
 
 export async function fetchAccountSetup(accessToken: string): Promise<AccountSetup> {
   const mp = `marketplace_id=${EBAY_MARKETPLACE_ID}`;
