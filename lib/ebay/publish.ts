@@ -21,11 +21,22 @@ import { estimateShipping } from "@/lib/shipping";
 // ── Constants (from the Python script) ───────────────────────────────────────
 
 const CATEGORY_MAP: Record<string, string> = {
-  womens_top: "15724", womens_dress: "63861", womens_skirt: "11554",
+  // Confirmed via multiple live eBay Women's Skirts listing URLs (all
+  // showing "/Womens-Skirts/63864/..."). This was previously "11554,"
+  // which is actually Women's Jeans (confirmed separately, correct for
+  // womens_jeans below) — meaning every women's skirt would have been
+  // filed as jeans. Found during the post-session category audit.
+  womens_top: "15724", womens_dress: "63861", womens_skirt: "63864",
   // Confirmed via live eBay listing URLs - a distinct category from
   // generic Tops/Dress Shirts, with its own Size Type taxonomy.
   womens_polo: "53159",
-  womens_pants: "57988", womens_coat: "57990",
+  // Confirmed via multiple live eBay Women's Pants listing URLs (all
+  // showing "/Womens-Pants/63863/..." and "/Casual-Pants-for-Women/63863/
+  // ..."). This was previously "57988" — which is actually Men's Coats,
+  // Jackets & Vests (confirmed separately, correct for mens_coat below) —
+  // a real, live mismatch found during the post-session category audit,
+  // not something any specific listing tonight happened to trigger.
+  womens_pants: "63863", womens_coat: "57990",
   // Confirmed via six independent live eBay listing URLs (all showing
   // "/Womens-Sweaters/63866/...") that 63866 is the real category — this
   // was previously "63864," off by two and pointing somewhere else
