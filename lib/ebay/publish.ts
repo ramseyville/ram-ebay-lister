@@ -144,7 +144,7 @@ const APPAREL_CATEGORIES = new Set([
   "womens_top", "womens_dress", "womens_skirt", "womens_pants", "womens_coat",
   "womens_sweater", "womens_jeans", "womens_clothing", "womens_shoes", "mens_top",
   "mens_pants", "mens_coat", "mens_sweater", "mens_jeans", "mens_clothing",
-  "mens_shoes", "scarf", "belt", "hat",
+  "mens_shoes", "scarf", "belt", "hat", "mens_polo", "womens_polo",
 ]);
 const PANTS_CATEGORIES = new Set([
   "womens_pants", "womens_jeans", "womens_skirt", "mens_pants", "mens_jeans",
@@ -156,6 +156,7 @@ const OUTERWEAR_CATEGORIES = new Set([
 
 const TOPS_CATEGORIES = new Set([
   "mens_top", "womens_top", "mens_sweater", "womens_sweater", "mens_clothing", "womens_clothing",
+  "mens_polo", "womens_polo",
 ]);
 
 // Categories where eBay's Aug/Sept 2026 standardized-size enforcement
@@ -164,10 +165,10 @@ const TOPS_CATEGORIES = new Set([
 // taxonomy-fetch failure should hard-block a publish (see publishListing).
 const SIZE_ENFORCED_CATEGORIES = new Set([
   "mens_top", "mens_pants", "mens_shorts", "mens_jacket", "mens_coat",
-  "mens_sweater", "mens_jeans", "mens_shoes", "mens_clothing",
+  "mens_sweater", "mens_jeans", "mens_shoes", "mens_clothing", "mens_polo",
   "womens_top", "womens_pants", "womens_jacket", "womens_coat",
   "womens_sweater", "womens_jeans", "womens_dress", "womens_skirt",
-  "womens_shoes", "womens_clothing",
+  "womens_shoes", "womens_clothing", "womens_polo",
 ]);
 // relevant category. Prevents "Hood: No Hood" on dress shirts, "Rise: Mid Rise"
 // on jackets, "Leg Style: Straight" on tops, etc.
@@ -2208,6 +2209,7 @@ export async function publishListing(
   const PROMOTED_CATEGORIES = new Set([
     "mens_top", "mens_pants", "mens_shorts", "mens_jacket", "mens_coat",
     "mens_sweater", "mens_jeans", "womens_top", "womens_pants", "womens_jacket",
+    "mens_polo", "womens_polo",
   ]);
   const brandLower = String(listing.brand || "").toLowerCase().trim();
   const isPromoted =
