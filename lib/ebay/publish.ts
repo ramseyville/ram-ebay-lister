@@ -1784,13 +1784,24 @@ export async function publishListing(
   // Big & Tall polo classified as mens_top, and routed to Dress Shirts by
   // default, had BOTH "Tall" and "Big & Tall" rejected as Size Type,
   // because the whole category was wrong, not either candidate value).
-  // Unlike the catch-all fix above, this applies even when the item was
-  // already correctly classified as mens_top/womens_top — that
-  // classification just isn't specific enough for polos.
-  if (catKey === "mens_top" || catKey === "womens_top") {
+  // This applies regardless of what the item was otherwise classified as
+  // — mens_top, a sweater, even the generic catch-all — since the photos,
+  // title, and description all saying "polo" should be a hard guarantee,
+  // not something contingent on the classification happening to land on
+  // exactly mens_top/womens_top first. Matches the specific phrase "Polo
+  // Shirt" rather than bare "Polo" to avoid misfiring on items that are
+  // genuinely something else by the brand "Polo Ralph Lauren" (a
+  // quarter-zip or jacket, say) — those wouldn't have "Shirt" right after
+  // "Polo" the way an actual polo shirt's title always does.
+  const POLO_MISCLASSIFY_TARGETS = new Set([
+    "mens_top", "womens_top", "mens_sweater", "womens_sweater",
+    "mens_clothing", "womens_clothing", "hard_goods", "other",
+  ]);
+  if (POLO_MISCLASSIFY_TARGETS.has(catKey)) {
     const titleUpper = String(listing.title || "").toUpperCase();
-    if (/\bPOLO\b/.test(titleUpper)) {
-      catKey = catKey === "womens_top" ? "womens_polo" : "mens_polo";
+    if (/\bPOLO\s+SHIRT\b/.test(titleUpper)) {
+      const isWomens = /\bWOMEN'?S\b/.test(titleUpper) || /\bWOMEN'?S\b/.test(String(listing.item_specifics?.Department || "").toUpperCase());
+      catKey = isWomens ? "womens_polo" : "mens_polo";
     }
   }
   const { categoryId: staticCat, fallbacks } = resolveCategory(
