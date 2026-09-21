@@ -84,7 +84,10 @@ export function sizeTypeCandidates(rawSize: string, catKey: string): string[] {
 
   if (isWomens) {
     if (parts.some((p) => /^[1-6]X$/.test(p) || /^(1[4-9]|[2-9]\d)W?$/.test(p))) return ["Plus"];
-    if (parts.some((p) => /^P/.test(p) || /P$/.test(p))) return ["Petite"];
+    // Confirmed via live eBay category facets ("Petites · Petites") that
+    // the real Size Type value is plural — "Petite" (singular) was
+    // rejected outright on a real listing.
+    if (parts.some((p) => /^P/.test(p) || /P$/.test(p))) return ["Petites"];
     return ["Regular"];
   }
 
