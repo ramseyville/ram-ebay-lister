@@ -106,7 +106,9 @@ describe("sizeTypeCandidates", () => {
   });
   it("handles women's Plus and Petite sizing separately from men's Big/Tall", () => {
     expect(sizeTypeCandidates("2X", "womens_top")).toEqual(["Plus"]);
-    expect(sizeTypeCandidates("PS", "womens_top")).toEqual(["Petite"]);
+    // Confirmed via real eBay category facets: the value is "Petites"
+    // (plural) — "Petite" was submitted and rejected on a real listing.
+    expect(sizeTypeCandidates("PS", "womens_top")).toEqual(["Petites"]);
     expect(sizeTypeCandidates("16W", "womens_top")).toEqual(["Plus"]);
   });
   it("detects Big & Tall for men's pants by waist size 44+", () => {
