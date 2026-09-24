@@ -8,6 +8,7 @@ import { saveDraft, loadDraft, clearDraft, hasDraft, formatDraftAge } from "@/li
 import { addToLedger } from "@/lib/ledger";
 import { estimateShipping } from "@/lib/shipping";
 import { EbayConnect } from "./EbayConnect";
+import { RenameSku } from "./RenameSku";
 import { ReviewBoard } from "./ReviewBoard";
 import { ListingsView } from "./ListingsView";
 import type {
@@ -662,6 +663,7 @@ export default function Home() {
       </header>
 
       <EbayConnect />
+      <RenameSku />
 
       {step === "upload" && (
         <>
