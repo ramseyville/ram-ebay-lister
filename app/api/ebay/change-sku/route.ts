@@ -3,6 +3,7 @@ import { EBAY_COOKIE, accessTokenFromCookie } from "@/lib/ebay/session";
 import { guardApiRequest } from "@/lib/api-guard";
 import {
   fetchAccountSetup,
+  fetchListingBySku,
   publishListing,
   withdrawOffer,
   republishOffer,
@@ -10,9 +11,13 @@ import {
 } from "@/lib/ebay/publish";
 import type { PublishInput } from "@/lib/ebay/publish";
 
-// Same shape as /api/ebay/publish, plus the SKU being retired.
-interface ChangeSkuInput extends PublishInput {
+// Same shape as /api/ebay/publish, plus the SKU being retired. listing and
+// images are now OPTIONAL: when omitted (e.g. renaming a SKU from an item
+// no longer loaded in the app's current batch), the listing is rebuilt
+// directly from what's already live on eBay for oldSku instead.
+interface ChangeSkuInput extends Partial<PublishInput> {
   oldSku: string;
+  sku: string;
 }
 
 // This ends up doing a full republish under the hood — give it the same
@@ -32,9 +37,10 @@ export async function POST(req: NextRequest) {
 
   const oldSku = (body.oldSku || "").trim();
   const newSku = (body.sku || "").trim();
-  if (!oldSku || !newSku || !body.listing || !Array.isArray(body.images) || body.images.length === 0) {
+  const hasLocalData = !!body.listing && Array.isArray(body.images) && body.images.length > 0;
+  if (!oldSku || !newSku) {
     return NextResponse.json(
-      { success: false, error: "Missing old SKU, new SKU, listing, or photos." },
+      { success: false, error: "Missing old SKU or new SKU." },
       { status: 400 }
     );
   }
@@ -61,6 +67,25 @@ export async function POST(req: NextRequest) {
   try {
     const setup = await fetchAccountSetup(accessToken);
 
+    // If the caller didn't hand us listing data directly (the normal case
+    // once the app's been reset for a new batch), rebuild it from what's
+    // already live on eBay for the old SKU.
+    let listing = body.listing;
+    let images = body.images;
+    let existingImageUrls: string[] | undefined;
+    if (!hasLocalData) {
+      const fetched = await fetchListingBySku(accessToken, oldSku);
+      if (!fetched.success) {
+        return NextResponse.json(
+          { success: false, error: `Could not read SKU "${oldSku}" back from eBay to rebuild it: ${fetched.error}` },
+          { status: 502 }
+        );
+      }
+      listing = fetched.listing;
+      images = [];
+      existingImageUrls = fetched.imageUrls;
+    }
+
     // 1. Withdraw the old listing FIRST. eBay's duplicate-listing detection
     //    compares a new offer against currently ACTIVE listings — publishing
     //    the new SKU while the old one is still live gets rejected as a
@@ -78,8 +103,9 @@ export async function POST(req: NextRequest) {
     // 2. Publish the new SKU.
     const published = await publishListing(accessToken, setup, {
       sku: newSku,
-      listing: body.listing,
-      images: body.images,
+      listing: listing!,
+      images: images!,
+      existingImageUrls,
     });
 
     if (!published.success) {
