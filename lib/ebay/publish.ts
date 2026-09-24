@@ -1141,6 +1141,74 @@ export async function updateOfferQuantity(
   return { success: true };
 }
 
+// ── Rebuild a listing's data directly from what's already live on eBay ────
+//
+// Reconstructs a ListingResult + image URLs from a SKU's existing inventory
+// item and offer — no local app state needed. Built specifically so a SKU
+// rename doesn't require the item to still be sitting in the app's current
+// in-memory batch (the app is normally reset between batches, at which
+// point that data is gone).
+export async function fetchListingBySku(
+  accessToken: string,
+  sku: string
+): Promise<
+  | { success: true; listing: ListingResult; imageUrls: string[] }
+  | { success: false; error: string }
+> {
+  if (!sku) return { success: false, error: "No SKU provided." };
+
+  const [itemLookup, offerLookup] = await Promise.all([
+    ebayRequest(accessToken, "GET", `${EBAY_INV_BASE}/inventory_item/${encodeURIComponent(sku)}`),
+    ebayRequest(
+      accessToken,
+      "GET",
+      `${EBAY_INV_BASE}/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${EBAY_MARKETPLACE_ID}`
+    ),
+  ]);
+
+  if (!itemLookup.ok) {
+    return { success: false, error: `Could not find eBay inventory item for SKU ${sku} (${itemLookup.status}).` };
+  }
+  const item = itemLookup.json || {};
+  const offer = offerLookup.ok ? (offerLookup.json?.offers || [])[0] : null;
+  if (!offer) {
+    return { success: false, error: `Found the inventory record for SKU ${sku}, but no offer/listing data for it.` };
+  }
+
+  const product = item.product || {};
+  const aspects: Record<string, string[]> = product.aspects || {};
+  const flatAspects: Record<string, string> = {};
+  for (const [k, v] of Object.entries(aspects)) {
+    if (Array.isArray(v) && v.length) flatAspects[k] = v[0];
+  }
+
+  const imageUrls: string[] = Array.isArray(product.imageUrls) ? product.imageUrls : [];
+  if (!imageUrls.length) {
+    return { success: false, error: `SKU ${sku} has no photos on file with eBay to reuse.` };
+  }
+
+  const listing: ListingResult = {
+    title: product.title || "",
+    description: product.description || "",
+    // Pass the category straight through rather than re-deriving a catKey —
+    // resolveCategory() already prioritizes an explicit category_id over
+    // any static mapping, so this reuses exactly the category the item is
+    // already correctly filed under.
+    category_id: String(offer.categoryId || ""),
+    brand: flatAspects["Brand"] || "",
+    // eBay's condition enum string (e.g. "NEW_WITH_TAGS") is also a valid
+    // input to conditionCandidates() on the way back out — no reverse
+    // mapping table needed.
+    condition: String(item.condition || ""),
+    condition_notes: item.conditionDescription || "",
+    size: flatAspects["Size"] || "",
+    suggested_price: offer.pricingSummary?.price?.value || undefined,
+    item_specifics: flatAspects,
+  };
+
+  return { success: true, listing, imageUrls };
+}
+
 // ── Retire a SKU after replacing it with a new one ─────────────────────────
 //
 // eBay's Inventory API has no "rename SKU" call — SKU is the resource
@@ -1604,6 +1672,10 @@ export interface PublishInput {
   sku: string;
   listing: ListingResult;
   images: { mediaType: string; data: string }[];
+  // When rebuilding a listing from data already on eBay (e.g. a SKU rename
+  // with no photos in hand locally), these are reused directly instead of
+  // re-uploading — they're already valid, eBay-hosted EPS URLs.
+  existingImageUrls?: string[];
 }
 
 export interface PublishResult {
@@ -1756,12 +1828,18 @@ export async function publishListing(
     };
   }
 
-  // 1. Upload photos → EPS URLs.
-  const photoList = [...input.images.slice(0, 12)];
+  // 1. Upload photos → EPS URLs. If we already have eBay-hosted URLs (a SKU
+  // rename rebuilt from data fetched off eBay itself, with no local photos),
+  // reuse them directly instead of re-uploading — they're already valid.
   const photoUrls: string[] = [];
-  for (const img of photoList) {
-    const url = await uploadPhoto(accessToken, img.data, img.mediaType, `${sku}.jpg`);
-    if (url) photoUrls.push(url);
+  if (input.existingImageUrls?.length) {
+    photoUrls.push(...input.existingImageUrls.slice(0, 12));
+  } else {
+    const photoList = [...input.images.slice(0, 12)];
+    for (const img of photoList) {
+      const url = await uploadPhoto(accessToken, img.data, img.mediaType, `${sku}.jpg`);
+      if (url) photoUrls.push(url);
+    }
   }
   if (photoUrls.length === 0) {
     return { success: false, sku, error: "Could not upload any photos to eBay." };
