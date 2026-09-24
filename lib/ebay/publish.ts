@@ -52,7 +52,13 @@ const CATEGORY_MAP: Record<string, string> = {
   // Jackets & Vests (confirmed separately, correct for mens_coat below) —
   // a real, live mismatch found during the post-session category audit,
   // not something any specific listing tonight happened to trigger.
-  womens_pants: "63863", womens_coat: "57990",
+  // Confirmed via multiple live eBay Women's Coats, Jackets & Vests listing
+  // URLs (all showing "/Womens-Coats-Jackets-Vests/63862/..."). This was
+  // previously "57990" — which is actually Men's Casual Button-Down Shirts
+  // (confirmed separately, now used for mens_casual_shirt below) — a real,
+  // live mismatch found while investigating a different reported bug, not
+  // something any specific listing tonight had directly triggered.
+  womens_pants: "63863", womens_coat: "63862",
   // Confirmed via six independent live eBay listing URLs (all showing
   // "/Womens-Sweaters/63866/...") that 63866 is the real category — this
   // was previously "63864," off by two and pointing somewhere else
@@ -62,6 +68,15 @@ const CATEGORY_MAP: Record<string, string> = {
   womens_sweater: "63866",
   womens_jeans: "11554", womens_clothing: "15724", womens_shoes: "3034",
   mens_top: "57991", mens_pants: "57989", mens_coat: "57988",
+  // Confirmed via a real eBay item listing breadcrumb (Clothing, Shoes &
+  // Accessories > Men > Men's Clothing > Shirts > Casual Button-Down
+  // Shirts) plus many consistent live browse URLs — a genuinely separate
+  // category from Dress Shirts (mens_top), which is where flannels,
+  // Western shirts, and other casual button-downs were defaulting to.
+  mens_casual_shirt: "57990",
+  // Confirmed via multiple consistent live eBay Men's T-Shirts browse URLs
+  // — another category mens_top was silently swallowing into Dress Shirts.
+  mens_tshirt: "15687",
   // Confirmed via multiple live eBay listing URLs — polos are a
   // dedicated, separate category from Dress Shirts, with their own Size
   // Type taxonomy. This mismatch (mens_top defaulting to Dress Shirts)
@@ -1655,6 +1670,39 @@ export async function publishListing(
       catKey = isWomens ? "womens_polo" : "mens_polo";
     }
   }
+  // Casual/flannel/western shirts are a genuinely separate eBay category
+  // from Dress Shirts (mens_top) — confirmed via a real item listing
+  // breadcrumb. Reported directly: the app was filing obviously-casual
+  // shirts as dress shirts, which stopped being caught once an earlier fix
+  // made the app trust its own mens_top mapping instead of consulting
+  // eBay's dynamic per-item category suggester — that suggester used to
+  // occasionally route these correctly by title keyword; the static
+  // mapping alone is too coarse to do the same. Scoped to men's items only
+  // — Mark's business is primarily menswear, and a women's equivalent
+  // category hasn't been separately verified, so guessing one here would
+  // risk repeating exactly the kind of unverified-mapping bug this fix is
+  // meant to close.
+  if (POLO_MISCLASSIFY_TARGETS.has(catKey) || catKey === "mens_top") {
+    const titleUpper = String(listing.title || "").toUpperCase();
+    const isWomens = /\bWOMEN'?S\b/.test(titleUpper) || /\bWOMEN'?S\b/.test(String(listing.item_specifics?.Department || "").toUpperCase());
+    if (
+      !isWomens &&
+      /\b(FLANNEL|CHAMOIS|WESTERN SHIRT|CAMP SHIRT|HAWAIIAN SHIRT|CASUAL SHIRT|PLAID SHIRT)\b/.test(titleUpper)
+    ) {
+      catKey = "mens_casual_shirt";
+    }
+  }
+  // T-shirts are also their own eBay category, separate from Dress Shirts
+  // — same root cause and same reasoning as casual shirts above. Checked
+  // after the casual-shirt block so a title matching both (unlikely, but
+  // e.g. "Flannel Tee") resolves to the more specific casual-shirt read.
+  if (POLO_MISCLASSIFY_TARGETS.has(catKey) || catKey === "mens_top") {
+    const titleUpper = String(listing.title || "").toUpperCase();
+    const isWomens = /\bWOMEN'?S\b/.test(titleUpper) || /\bWOMEN'?S\b/.test(String(listing.item_specifics?.Department || "").toUpperCase());
+    if (!isWomens && /\b(T-SHIRT|T SHIRT|TSHIRT|TEE)\b/.test(titleUpper)) {
+      catKey = "mens_tshirt";
+    }
+  }
   const { categoryId: staticCat, fallbacks } = resolveCategory(
     catKey !== listing.category ? { ...listing, category: catKey } : listing
   );
@@ -2059,7 +2107,7 @@ export async function publishListing(
   const PROMOTED_CATEGORIES = new Set([
     "mens_top", "mens_pants", "mens_shorts", "mens_jacket", "mens_coat",
     "mens_sweater", "mens_jeans", "womens_top", "womens_pants", "womens_jacket",
-    "mens_polo", "womens_polo",
+    "mens_polo", "womens_polo", "mens_casual_shirt", "mens_tshirt",
   ]);
   const brandLower = String(listing.brand || "").toLowerCase().trim();
   const isPromoted =
