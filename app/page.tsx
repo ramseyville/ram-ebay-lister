@@ -891,9 +891,10 @@ export default function Home() {
         const perListing = total / sessionCost.listings;
         return (
           <p className="footnote session-cost">
-            💡 Session: <strong>{sessionCost.listings} listing{sessionCost.listings !== 1 ? "s" : ""}</strong> analyzed
+            💡 Session: <strong>{sessionCost.listings} generation{sessionCost.listings !== 1 ? "s" : ""}</strong> run
+            {" "}(counts every regeneration, not just distinct items)
             · AI cost <strong>${total.toFixed(3)}</strong> total
-            · <strong>${perListing.toFixed(3)}</strong> per listing (approx. — actual is somewhat lower)
+            · <strong>${perListing.toFixed(3)}</strong> per generation (approx. — actual is somewhat lower)
           </p>
         );
       })()}
