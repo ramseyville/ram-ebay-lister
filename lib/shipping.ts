@@ -6,6 +6,9 @@ interface ShippingEstimate { weight_oz: number; dimensions: ShippingDimensions; 
 // Hard goods and shoes use small boxes only.
 const POLY_MAILER: ShippingDimensions = { length: 12, width: 12, height: 1 };
 const SMALL_BOX: ShippingDimensions = { length: 12, width: 12, height: 3 };
+// Ties ship in their own small box, not a poly mailer or the general
+// small-box size — confirmed real measurements.
+const TIE_BOX: ShippingDimensions = { length: 8, width: 5, height: 3 };
 
 const WEIGHTS: Record<string, { oz: number; dims: ShippingDimensions; note: string }> = {
   mens_top:       { oz: 14, dims: POLY_MAILER, note: "Shirt - poly mailer 12x12x1" },
@@ -23,7 +26,7 @@ const WEIGHTS: Record<string, { oz: number; dims: ShippingDimensions; note: stri
   womens_shoes:   { oz: 28, dims: SMALL_BOX,   note: "Shoes - small box 12x12x3" },
   handbag:        { oz: 20, dims: SMALL_BOX,   note: "Handbag - small box 12x12x3" },
   wallet:         { oz:  6, dims: POLY_MAILER, note: "Wallet - poly mailer 12x12x1" },
-  mens_tie:       { oz:  3, dims: POLY_MAILER, note: "Tie - poly mailer 12x12x1" },
+  mens_tie:       { oz: 7.5, dims: TIE_BOX,     note: "Tie - box 8x5x3" },
   hat:            { oz:  6, dims: POLY_MAILER, note: "Hat - poly mailer 12x12x1" },
   hard_goods:     { oz: 24, dims: SMALL_BOX,   note: "Hard goods - small box 12x12x3" },
   mens_clothing:  { oz: 16, dims: POLY_MAILER, note: "Clothing - poly mailer 12x12x1" },
