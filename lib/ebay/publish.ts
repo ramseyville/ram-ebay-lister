@@ -1717,6 +1717,19 @@ export async function publishListing(
       catKey = isWomens ? "womens_sweater" : "mens_sweater";
     }
   }
+  // Same catch-all pattern, different item type — confirmed directly on an
+  // Ariat "R.E.A.L. Denim" jeans listing (an unusual brand pairing —
+  // Ariat is western/equestrian-first, not typically denim-associated —
+  // likely threw off the classification the same way an unusual title
+  // has for other item types tonight). "Jeans"/"Denim" in the title is
+  // as unambiguous a signal as "Pullover" was above.
+  if (catKey === "other" || catKey === "hard_goods") {
+    const titleUpper = String(listing.title || "").toUpperCase();
+    if (/\b(JEANS|DENIM)\b/.test(titleUpper)) {
+      const isWomens = /\bWOMEN'?S\b/.test(titleUpper) || /\bWOMEN'?S\b/.test(String(listing.item_specifics?.Department || "").toUpperCase());
+      catKey = isWomens ? "womens_jeans" : "mens_jeans";
+    }
+  }
   // Polos are a genuinely separate eBay category from generic Tops/Dress
   // Shirts, with their own Size Type taxonomy — confirmed directly (a
   // Big & Tall polo classified as mens_top, and routed to Dress Shirts by
