@@ -111,6 +111,14 @@ describe("sizeTypeCandidates", () => {
     expect(sizeTypeCandidates("PS", "womens_top")).toEqual(["Petites"]);
     expect(sizeTypeCandidates("16W", "womens_top")).toEqual(["Plus"]);
   });
+  it("does not classify a bare standard-range number as Plus without the W suffix", () => {
+    // Confirmed real bug: bare "14" (a standard size, not plus) was
+    // matching the same pattern as "14W" because the W was optional in
+    // the regex. eBay rejected "Plus" as Size Type paired with Size "14".
+    expect(sizeTypeCandidates("14", "womens_pants")).not.toEqual(["Plus"]);
+    expect(sizeTypeCandidates("16", "womens_pants")).not.toEqual(["Plus"]);
+    expect(sizeTypeCandidates("14W", "womens_pants")).toEqual(["Plus"]);
+  });
   it("detects Big & Tall for men's pants by waist size 44+", () => {
     expect(sizeTypeCandidates("46", "mens_pants")).toEqual(["Big & Tall", "Tall"]);
   });
