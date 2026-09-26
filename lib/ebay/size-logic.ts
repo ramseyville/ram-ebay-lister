@@ -85,7 +85,12 @@ export function sizeTypeCandidates(rawSize: string, catKey: string): string[] {
   const isWomens = catKey.startsWith("womens_");
 
   if (isWomens) {
-    if (parts.some((p) => /^[1-6]X$/.test(p) || /^(1[4-9]|[2-9]\d)W?$/.test(p))) return ["Plus"];
+    // The W suffix is REQUIRED here, not optional — confirmed via a real
+    // rejection: bare "14" (no W) is a standard size, not plus, and eBay
+    // correctly rejected "Plus" paired with it. Only the explicit W variant
+    // (14W, 16W...) is genuinely plus-size; a bare two-digit number in this
+    // range is not.
+    if (parts.some((p) => /^[1-6]X$/.test(p) || /^(1[4-9]|[2-9]\d)W$/.test(p))) return ["Plus"];
     // Confirmed via live eBay category facets ("Petites · Petites") that
     // the real Size Type value is plural — "Petite" (singular) was
     // rejected outright on a real listing.
