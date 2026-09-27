@@ -768,6 +768,13 @@ textarea {
   font-family: var(--font-display);
 }
 
+.board-notes {
+  width: 100%;
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  resize: vertical;
+}
+
 .board-sku {
   flex: 0 0 auto;
   width: 8.5ch;

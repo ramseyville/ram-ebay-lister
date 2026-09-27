@@ -12,9 +12,21 @@ import {
 import {
   suggestLeafCategory,
   categoryAspects,
-  acceptedConditionIds,
+  conditionPolicy,
   type AspectMeta,
+  type ConditionPolicy,
 } from "./taxonomy";
+import {
+  CONDITION_ID_ENUM,
+  applyConditionToDescription,
+  buildConditionText,
+  conditionIdCandidates,
+  conditionIdForEnum,
+  conditionName,
+  conditionStandard,
+  isApparelConditionSet,
+  normalizeConditionGrade,
+} from "@/lib/conditions";
 import type { ListingResult } from "@/lib/types";
 import { estimateShipping } from "@/lib/shipping";
 import {
@@ -112,75 +124,7 @@ const CATEGORY_MAP: Record<string, string> = {
 
 const LEAF_FALLBACKS = ["1463", "22733", "2550", "48108", "316", "171485", "2624", "2613"];
 
-const CONDITION_ALIASES: Record<string, string> = {
-  NEW: "NEW_WITH_TAGS",
-  NWT: "NEW_WITH_TAGS",
-  NEW_WITH_TAGS: "NEW_WITH_TAGS",
-  NEW_WITH_BOX: "NEW_WITH_TAGS",
-  NEW_WITHOUT_TAGS: "NEW_NO_TAGS",
-  NEW_WITHOUT_BOX: "NEW_NO_TAGS",
-  NEW_NO_TAGS: "NEW_NO_TAGS",
-  NEW_OTHER: "NEW_NO_TAGS",
-  OPEN_BOX: "NEW_NO_TAGS",
-  LIKE_NEW: "EXCELLENT",
-  PREOWNED_EXCELLENT: "EXCELLENT",
-  PRE_OWNED_EXCELLENT: "EXCELLENT",
-  USED_EXCELLENT: "EXCELLENT",
-  EXCELLENT: "EXCELLENT",
-  VERY_GOOD: "VERY_GOOD",
-  PREOWNED_VERY_GOOD: "VERY_GOOD",
-  PRE_OWNED_VERY_GOOD: "VERY_GOOD",
-  USED_VERY_GOOD: "VERY_GOOD",
-  USED: "GOOD",
-  PREOWNED: "GOOD",
-  PRE_OWNED: "GOOD",
-  USED_GOOD: "GOOD",
-  PREOWNED_GOOD: "GOOD",
-  PRE_OWNED_GOOD: "GOOD",
-  GOOD: "GOOD",
-  ACCEPTABLE: "FAIR",
-  USED_ACCEPTABLE: "FAIR",
-  FAIR: "FAIR",
-  PREOWNED_FAIR: "FAIR",
-  PRE_OWNED_FAIR: "FAIR",
-  USED_FAIR: "FAIR",
-};
-
-const CONDITION_ID_ENUM: Record<number, string> = {
-  1000: "NEW",
-  1500: "NEW_OTHER",
-  1750: "NEW_WITH_DEFECTS",
-  2750: "LIKE_NEW",
-  2990: "PRE_OWNED_EXCELLENT",
-  3000: "USED_EXCELLENT",
-  3010: "PRE_OWNED_FAIR",
-  4000: "USED_VERY_GOOD",
-  5000: "USED_GOOD",
-  6000: "USED_ACCEPTABLE",
-  7000: "FOR_PARTS_OR_NOT_WORKING",
-};
-
-const GENERAL_CONDITION_ID_PREFERENCES: Record<string, number[]> = {
-  NEW_WITH_TAGS: [1000, 1500, 1750],
-  NEW_NO_TAGS: [1500, 1000, 1750],
-  EXCELLENT: [3000, 2750, 4000, 5000],
-  VERY_GOOD: [4000, 3000, 5000, 2750],
-  GOOD: [5000, 4000, 3000, 6000],
-  FAIR: [6000, 5000, 4000, 3000],
-};
-
-const APPAREL_CONDITION_ID_PREFERENCES: Record<string, number[]> = {
-  NEW_WITH_TAGS: [1000, 1500, 1750],
-  NEW_NO_TAGS: [1500, 1000, 1750],
-  EXCELLENT: [2990, 3000, 3010],
-  // eBay has no apparel "Very Good" tier. Use Good before overgrading as Excellent.
-  VERY_GOOD: [3000, 2990, 3010],
-  GOOD: [3000, 3010, 2990],
-  FAIR: [3010, 3000, 2990],
-};
-
-const GENERAL_SAFE_CONDITION_IDS = [3000, 4000, 5000, 6000, 2750, 1500, 1000, 1750, 7000];
-const APPAREL_SAFE_CONDITION_IDS = [3000, 2990, 3010, 1500, 1000, 1750];
+// Condition grade → eBay condition ID tables live in lib/conditions.ts.
 
 
 const OUTERWEAR_CATEGORIES = new Set([
@@ -332,51 +276,6 @@ function resolvePrice(raw: number | string | undefined): number {
   let base = typeof raw === "string" ? parseFloat(raw) : raw ?? 0;
   if (!base || Number.isNaN(base) || base <= 0) base = 29.99;
   return Math.round(base * 100) / 100;
-}
-
-function normalizeConditionInput(value: string | undefined): string {
-  const cleaned = (value || "GOOD")
-    .trim()
-    .toUpperCase()
-    .replace(/['’]/g, "")
-    .replace(/[^A-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return CONDITION_ALIASES[cleaned] || "GOOD";
-}
-
-function isApparelConditionPolicy(acceptedIds: Set<number>): boolean {
-  return acceptedIds.has(2990) || acceptedIds.has(3010);
-}
-
-function conditionIdsForGrade(grade: string, acceptedIds: Set<number>): number[] {
-  const apparel = isApparelConditionPolicy(acceptedIds);
-  const preferences = apparel ? APPAREL_CONDITION_ID_PREFERENCES : GENERAL_CONDITION_ID_PREFERENCES;
-  const safeIds = apparel ? APPAREL_SAFE_CONDITION_IDS : GENERAL_SAFE_CONDITION_IDS;
-  const preferred = preferences[grade] || preferences.GOOD;
-
-  if (!acceptedIds.size) return preferred;
-
-  const out: number[] = [];
-  const add = (id: number) => {
-    if (acceptedIds.has(id) && CONDITION_ID_ENUM[id] && !out.includes(id)) out.push(id);
-  };
-  for (const id of preferred) add(id);
-  for (const id of safeIds) add(id);
-  for (const id of acceptedIds) add(id);
-  return out.length ? out : preferred;
-}
-
-// Ordered eBay Inventory condition enums to try for an internal grade. The grade
-// comes from photo analysis; the allowed IDs come from the chosen leaf category's
-// Metadata policy, so apparel/books/electronics/etc. can each resolve differently.
-function conditionCandidates(grade: string | undefined, acceptedIds: Set<number>): string[] {
-  const desired = normalizeConditionInput(grade);
-  const out: string[] = [];
-  for (const id of conditionIdsForGrade(desired, acceptedIds)) {
-    const en = CONDITION_ID_ENUM[id];
-    if (en && !out.includes(en)) out.push(en);
-  }
-  return out.length ? out : ["USED_GOOD"];
 }
 
 function resolveCategory(listing: ListingResult): {
@@ -1197,7 +1096,7 @@ export async function fetchListingBySku(
     category_id: String(offer.categoryId || ""),
     brand: flatAspects["Brand"] || "",
     // eBay's condition enum string (e.g. "NEW_WITH_TAGS") is also a valid
-    // input to conditionCandidates() on the way back out — no reverse
+    // input to conditionIdCandidates() on the way back out — no reverse
     // mapping table needed.
     condition: String(item.condition || ""),
     condition_notes: item.conditionDescription || "",
@@ -1701,6 +1600,12 @@ export interface PublishResult {
   listingId?: string;
   offerId?: string;
   error?: string;
+  // Condition eBay listed the item under (after category validation/fallback).
+  conditionId?: number;
+  conditionName?: string;
+  // False when the category's condition policy couldn't be fetched and the
+  // ID was chosen without validation (eBay's own check still applied).
+  conditionVerified?: boolean;
 }
 
 const CL = { "Content-Language": "en-US" };
@@ -1939,23 +1844,30 @@ export async function publishListing(
   // if it still fails, REFUSE to publish rather than risk an unchecked size
   // going out. Non-size categories (collectibles, hard goods, etc.) still
   // proceed on a metadata failure — there's no size-enforcement risk there.
-  let acceptedConds = new Set<number>();
+  let condPolicy: ConditionPolicy | null = null;
   let metaOk = false;
   for (let attempt = 0; attempt < 2 && !metaOk; attempt++) {
     try {
-      const [meta, conds] = await Promise.all([
+      const [meta, policy]: [AspectMeta[], ConditionPolicy | null] = await Promise.all([
         categoryAspects(catId), // required aspects + valid values  → fixes 25002
-        acceptedConditionIds(catId), // accepted condition ids       → fixes 25021
+        // accepted condition ids → fixes 25021. A lookup failure must not
+        // sink the aspects fetch, so it's caught separately.
+        condPolicy ? Promise.resolve(condPolicy) : conditionPolicy(catId).catch(() => null),
       ]);
       if (meta.length) {
         reconcileAspects(aspects, meta, listing, catKey);
         metaOk = true;
       }
-      acceptedConds = conds;
+      condPolicy = policy;
     } catch {
       if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
     }
   }
+  // The aspects loop stops as soon as aspects succeed, so give a failed
+  // condition lookup its own retry — validating the grade against the
+  // category's real accepted IDs beats guessing and recovering from 25021.
+  if (!condPolicy) condPolicy = await conditionPolicy(catId).catch(() => null);
+  const acceptedConds = new Set((condPolicy?.conditions ?? []).map((c) => c.id));
   if (!metaOk && SIZE_ENFORCED_CATEGORIES.has(catKey)) {
     return {
       success: false,
@@ -2001,8 +1913,29 @@ export async function publishListing(
   if (SIZE_ENFORCED_CATEGORIES.has(catKey) && !aspects["Size"]?.length && listing.size) {
     aspects["Size"] = [sizeAspectValue(String(listing.size), catKey)];
   }
-  const condCandidates = conditionCandidates(listing.condition, acceptedConds);
-  const condition = condCandidates[0] || "USED_EXCELLENT";
+  // Resolve the grade (AI- or seller-chosen) to condition IDs this leaf
+  // category accepts, closest first. The first is what we submit; the rest
+  // are the 25021/25059 recovery ladder.
+  const condApparel = acceptedConds.size
+    ? isApparelConditionSet(acceptedConds)
+    : APPAREL_CATEGORIES.has(catKey);
+  const condIds = conditionIdCandidates(listing.condition, acceptedConds, APPAREL_CATEGORIES.has(catKey));
+  const condCandidates = condIds.map((id) => CONDITION_ID_ENUM[id]);
+  const condGrade = normalizeConditionGrade(listing.condition);
+  const primaryCondId = condIds[0] ?? (condApparel ? 3000 : 5000);
+  // "NWT" in the title is only true when we're actually listing as New with tags.
+  const listedAsNwt = condGrade === "NEW_WITH_TAGS" && primaryCondId === 1000;
+  const condNotes = listing.condition_notes_override ?? listing.condition_notes ?? "";
+  // Buyer-facing condition text (eBay's condition field AND the description's
+  // condition paragraph) is always rebuilt from the ID actually submitted, so
+  // it can't contradict the condition eBay displays — including after a
+  // fallback or a recovery step to a different ID.
+  const conditionTextFor = (id: number): string =>
+    buildConditionText(
+      condPolicy?.conditions.find((c) => c.id === id)?.name || conditionName(id, condApparel),
+      conditionStandard(id, condApparel),
+      condNotes
+    );
   // Build packageWeightAndSize from a deterministic per-category lookup
   // (lib/shipping.ts), not the AI's own shipping_weight_oz guess. The prompt
   // gives the model no real basis to calculate weight, and it was
@@ -2084,6 +2017,14 @@ export async function publishListing(
     const price = parseFloat(amount);
     return price >= 90 ? match : "";
   }).replace(/\s{2,}/g, " ").trim().slice(0, 80);
+  // A title claiming NWT/New With Tags on an item listed under any other
+  // condition misstates it — drop the claim (padding below refills length).
+  if (!listedAsNwt) {
+    ebayTitle = ebayTitle
+      .replace(/\b(NWT|New With Tags)\b/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
   if (ebayTitle.length < 77) {
     // Candidate padding tokens — item-specific only, in priority order.
     // Each token is only added if it isn't already present in the title.
@@ -2103,7 +2044,7 @@ export async function publishListing(
         ? rawSize.split(/[/,]/)[0].trim()
         : null;
     const padCandidates = [
-      listing.condition === "NEW_WITH_TAGS" || listing.condition === "NEW_NO_TAGS" ? "NWT" : null,
+      listedAsNwt ? "NWT" : null,
       coreSize,
       listing.color ? singleValue(listing.color) : null,
       listing.material ? singleValue(listing.material) : null,
@@ -2146,9 +2087,9 @@ export async function publishListing(
         specifics["Fabric Type"] || null,                          // e.g. "Fleece", "Knit", "Twill"
         specifics["Pattern"] && specifics["Pattern"] !== "Solid" ? specifics["Pattern"] : null,
         // Condition descriptors — factual, tied to the actual listing.condition, not a guess.
-        listing.condition === "NEW_WITH_TAGS" ? "NWT New" : null,
-        listing.condition === "EXCELLENT" ? "Excellent Condition" : null,
-        listing.condition === "VERY_GOOD" ? "Very Good Condition" : null,
+        listedAsNwt ? "NWT New" : null,
+        primaryCondId === 2990 || primaryCondId === 2750 ? "Excellent Condition" : null,
+        primaryCondId === 4000 ? "Very Good Condition" : null,
       ];
 
       const phrases = fromSpecifics.filter((t): t is string =>
@@ -2171,22 +2112,30 @@ export async function publishListing(
   // eBay's own filter (SPx_ItemConditionField_IrrelventTerms) rejects any
   // pricing/promotional language in the condition field outright —
   // confirmed directly on a listing mentioning "$28.00 price sticker."
-  // The prompt now avoids this at the source, but strip any dollar amount
-  // that slips through anyway as a cheap backstop, rather than let a
-  // single stray price mention block the whole listing.
-  const cleanConditionNotes = (listing.condition_notes || "").replace(/\$\d[\d,]*(\.\d{2})?/g, "").replace(/\s{2,}/g, " ").trim();
+  // buildConditionText() strips dollar amounts as a backstop.
+  const firstCondId = conditionIdForEnum(condCandidates[0] || "") ?? primaryCondId;
+  const firstCondText = conditionTextFor(firstCondId);
 
   const inventoryItem: any = {
     product: {
       title: ebayTitle,
-      description: listing.description || "",
+      description: applyConditionToDescription(listing.description || "", firstCondText),
       aspects,
       imageUrls: photoUrls.slice(0, 12),
     },
-    condition,
-    conditionDescription: cleanConditionNotes,
+    condition: condCandidates[0] || CONDITION_ID_ENUM[primaryCondId],
+    conditionDescription: firstCondText,
     availability: { shipToLocationAvailability: { quantity: 1 } },
     packageWeightAndSize,
+  };
+
+  // Switch the submitted condition and keep both condition texts in step.
+  const applyCondition = (item: any, en: string) => {
+    const id = conditionIdForEnum(en) ?? primaryCondId;
+    const text = conditionTextFor(id);
+    item.condition = en;
+    item.conditionDescription = text;
+    item.product.description = applyConditionToDescription(item.product.description, text);
   };
 
   const putInventory = () =>
@@ -2210,7 +2159,7 @@ export async function publishListing(
     ) {
       for (const alt of condCandidates) {
         if (alt === inventoryItem.condition) continue;
-        inventoryItem.condition = alt;
+        applyCondition(inventoryItem, alt);
         r = await putInventory();
         if ([200, 201, 204].includes(r.status)) break;
         if (!errorIds(r).includes(25021) && !errorIds(r).includes(25059)) break;
@@ -2329,7 +2278,7 @@ export async function publishListing(
   }
 
   // 4. Publish, with recovery.
-  return publishOfferWithRecovery(accessToken, {
+  const result = await publishOfferWithRecovery(accessToken, {
     sku,
     offerId,
     catId,
@@ -2339,8 +2288,20 @@ export async function publishListing(
     offerBody,
     fallbacks,
     condCandidates,
+    applyCondition,
     rawSize: String(listing.size || ""),
   });
+  if (!result.success) return result;
+  // Report the condition that actually went live (after any fallback or
+  // recovery step) so the UI can show it.
+  const finalId = conditionIdForEnum(inventoryItem.condition) ?? primaryCondId;
+  return {
+    ...result,
+    conditionId: finalId,
+    conditionName:
+      condPolicy?.conditions.find((c) => c.id === finalId)?.name || conditionName(finalId, condApparel),
+    conditionVerified: acceptedConds.size > 0,
+  };
 }
 
 async function publishOfferWithRecovery(
@@ -2355,6 +2316,7 @@ async function publishOfferWithRecovery(
     offerBody: any;
     fallbacks: string[];
     condCandidates: string[];
+    applyCondition: (item: any, en: string) => void;
     rawSize: string;
   }
 ): Promise<PublishResult> {
@@ -2389,7 +2351,7 @@ async function publishOfferWithRecovery(
   if (eids.includes(25059) || eids.includes(25021)) {
     for (const alt of ctx.condCandidates) {
       if (alt === ctx.inventoryItem.condition) continue;
-      ctx.inventoryItem.condition = alt;
+      ctx.applyCondition(ctx.inventoryItem, alt);
       await putInventory();
       r = await doPublish();
       if (r.ok) return { success: true, sku, offerId, listingId: r.json?.listingId || "" };

@@ -4,18 +4,31 @@ import { useEffect, useMemo, useState } from "react";
 import type { ItemGroup, ListingResult, Photo } from "@/lib/types";
 import { formatShipping, estimateShipping } from "@/lib/shipping";
 import { apiPost } from "@/lib/api-client";
+import {
+  CONDITION_GRADES,
+  applyConditionToDescription,
+  buildConditionText,
+  conditionName,
+  conditionStandard,
+  gradeDisplay,
+} from "@/lib/conditions";
 
 const TITLE_LIMIT = 80;
 
-// eBay's pre-owned condition tiers, matching the values the model returns.
-const CONDITIONS: { value: string; label: string }[] = [
-  { value: "NEW_WITH_TAGS",  label: "New with tags" },
-  { value: "NEW_NO_TAGS",    label: "New without tags" },
-  { value: "EXCELLENT",      label: "Pre-owned · Excellent" },
-  { value: "VERY_GOOD",      label: "Pre-owned · Very good" },
-  { value: "GOOD",           label: "Pre-owned · Good" },
-  { value: "FAIR",           label: "Pre-owned · Fair" },
-];
+// Condition grades with the apparel eBay condition ID each maps to. The ID
+// is re-validated against the listing's category at publish time.
+const CONDITIONS = CONDITION_GRADES.map((g) => ({
+  value: g.grade,
+  label: `${conditionName(g.id, true)} (${g.id})`,
+}));
+
+// Rebuild the description's condition paragraph for a grade + notes, so the
+// preview matches the condition being submitted.
+function syncConditionParagraph(description: string, condition: string, notes: string): string {
+  const { id } = gradeDisplay(condition);
+  const text = buildConditionText(conditionName(id, true), conditionStandard(id, true), notes);
+  return applyConditionToDescription(description, text);
+}
 
 function formatPrice(value: ListingResult["suggested_price"]): string {
   const n = typeof value === "string" ? parseFloat(value) : value;
@@ -300,12 +313,21 @@ export function ListingCard({
               <select
                 id={`cond-${group.id}`}
                 value={listing.condition ?? "GOOD"}
-                onChange={(e) => onEdit(group.id, { condition: e.target.value })}
+                onChange={(e) =>
+                  onEdit(group.id, {
+                    condition: e.target.value,
+                    description: syncConditionParagraph(
+                      listing.description,
+                      e.target.value,
+                      displayedConditionNotes
+                    ),
+                  })
+                }
               >
                 {listing.condition &&
                   !CONDITIONS.some((c) => c.value === listing.condition) && (
                     <option value={listing.condition}>
-                      {listing.condition.replace(/_/g, " ")}
+                      {gradeDisplay(listing.condition).label} ({gradeDisplay(listing.condition).id})
                     </option>
                   )}
                 {CONDITIONS.map((c) => (
@@ -314,6 +336,9 @@ export function ListingCard({
                   </option>
                 ))}
               </select>
+              <span style={{ fontSize: "0.72rem", color: "var(--color-ink-faint)" }}>
+                Checked against the eBay category at publish
+              </span>
             </div>
             {listing.brand && (
               <div className="stat">
@@ -353,7 +378,14 @@ export function ListingCard({
                 rows={3}
                 placeholder="Add your own condition notes — visible in the description"
                 onChange={(e) =>
-                  onEdit(group.id, { condition_notes_override: e.target.value })
+                  onEdit(group.id, {
+                    condition_notes_override: e.target.value,
+                    description: syncConditionParagraph(
+                      listing.description,
+                      listing.condition ?? "GOOD",
+                      e.target.value
+                    ),
+                  })
                 }
               />
             ) : (
@@ -504,6 +536,11 @@ export function ListingCard({
                   Not actually posted? Undo
                 </button>
               </p>
+              {group.postedCondition && (
+                <p style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
+                  Listed as: <strong>{group.postedCondition}</strong>
+                </p>
+              )}
               <div className="post-row" style={{ marginTop: "0.5rem" }}>
                 <div className="price-input">
                   <span>$</span>

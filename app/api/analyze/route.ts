@@ -175,6 +175,12 @@ export async function POST(req: NextRequest) {
   }
 
   const imageBlocks = toImageBlocks(body.images);
+  // Seller notes carry what photos can't show (never worn, tags in a drawer,
+  // a flaw that didn't photograph). Capped so a paste can't blow up the prompt.
+  const sellerNotes = typeof body.notes === "string" ? body.notes.trim().slice(0, 2000) : "";
+  const userText = sellerNotes
+    ? `Seller notes about this item (use them when grading condition and writing condition_notes; they override what the photos alone suggest):\n${sellerNotes}\n\nAnalyze these photos and return the listing JSON now.`
+    : "Analyze these photos and return the listing JSON now.";
   if (imageBlocks.length === 0) {
     return NextResponse.json(
       { ok: false, error: "No readable photos found. Use JPG, PNG, or WebP." },
@@ -219,7 +225,7 @@ export async function POST(req: NextRequest) {
                 ...imageBlocks,
                 {
                   type: "text",
-                  text: "Analyze these photos and return the listing JSON now.",
+                  text: userText,
                 },
               ],
             },
@@ -238,7 +244,7 @@ export async function POST(req: NextRequest) {
               role: "user",
               content: [
                 ...imageBlocks.slice(0, 3),
-                { type: "text", text: "Analyze these photos and return the listing JSON now." },
+                { type: "text", text: userText },
               ],
             }],
           });

@@ -214,6 +214,11 @@ export default function Home() {
       prev.map((g) => (g.id === groupId ? { ...g, name } : g))
     );
 
+  const setNotes = (groupId: string, notes: string) =>
+    setGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? { ...g, notes } : g))
+    );
+
   // Move a photo to position 0 in the group so it becomes the eBay main image.
   const setMainPhoto = useCallback((groupId: string, photoId: string) => {
     setGroups((prev) =>
@@ -321,7 +326,11 @@ export default function Home() {
         )
       );
       try {
-        const res = await apiPost("/api/analyze", { profile: "auto", images: imgs });
+        const res = await apiPost("/api/analyze", {
+          profile: "auto",
+          images: imgs,
+          notes: group.notes || undefined,
+        });
         const data = (await readJson(res)) as AnalyzeResponse;
         if (!data.ok || !data.listing) {
           throw new Error(data.error || "Could not write this listing.");
@@ -452,6 +461,8 @@ export default function Home() {
           success: boolean;
           listingId?: string;
           error?: string;
+          conditionId?: number;
+          conditionName?: string;
         };
         if (!data.success) throw new Error(data.error || "eBay rejected the listing.");
         // Add to monthly ledger
@@ -474,7 +485,14 @@ export default function Home() {
         setGroups((prev) =>
           prev.map((g) =>
             g.id === groupId
-              ? { ...g, postStatus: "posted", listingId: data.listingId }
+              ? {
+                  ...g,
+                  postStatus: "posted",
+                  listingId: data.listingId,
+                  postedCondition: data.conditionName
+                    ? `${data.conditionName} (${data.conditionId})`
+                    : undefined,
+                }
               : g
           )
         );
@@ -495,7 +513,7 @@ export default function Home() {
     setGroups((prev) =>
       prev.map((g) =>
         g.id === groupId
-          ? { ...g, postStatus: undefined, listingId: undefined, postError: undefined }
+          ? { ...g, postStatus: undefined, listingId: undefined, postError: undefined, postedCondition: undefined }
           : g
       )
     );
@@ -842,6 +860,7 @@ export default function Home() {
           photoById={photoById}
           onRename={rename}
           onRenameSku={renameSku}
+          onNotesChange={setNotes}
           onMovePhoto={movePhoto}
           onDeleteGroup={deleteGroup}
           onAddGroup={addGroup}

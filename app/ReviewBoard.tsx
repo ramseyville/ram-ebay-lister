@@ -8,6 +8,7 @@ interface ReviewBoardProps {
   photoById: (id: string) => Photo | undefined;
   onRename: (groupId: string, name: string) => void;
   onRenameSku: (groupId: string, sku: string) => void;
+  onNotesChange: (groupId: string, notes: string) => void;
   onMovePhoto: (photoId: string, toGroupId: string | "orphans") => void;
   onDeleteGroup: (groupId: string) => void;
   onAddGroup: () => void;
@@ -79,6 +80,7 @@ export function ReviewBoard({
   photoById,
   onRename,
   onRenameSku,
+  onNotesChange,
   onMovePhoto,
   onDeleteGroup,
   onAddGroup,
@@ -130,6 +132,14 @@ export function ReviewBoard({
                 Delete
               </button>
             </header>
+            <textarea
+              className="board-notes"
+              rows={2}
+              value={group.notes ?? ""}
+              aria-label={`Notes for ${group.name}`}
+              placeholder="Notes for the AI (optional) — e.g. never worn, tags attached, small stain on left cuff"
+              onChange={(e) => onNotesChange(group.id, e.target.value)}
+            />
             {group.photoIds.length === 0 ? (
               <p className="board-empty">
                 Empty — move photos here using the menu under a photo.

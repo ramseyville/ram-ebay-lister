@@ -35,6 +35,9 @@ export interface AnalyzeRequestBody {
   // Browser-resized JPEG data URLs or raw base64 strings.
   images: { mediaType: string; data: string }[];
   profile: string;
+  // Seller's own notes about the item (condition, flaws, "new with tags"),
+  // given to the model alongside the photos.
+  notes?: string;
 }
 
 export interface TokenUsage {
@@ -76,6 +79,7 @@ export interface ItemGroup {
   sku: string; // bin reference, e.g. "K75-A"
   name: string;
   photoIds: string[];
+  notes?: string; // seller notes for the AI (condition, flaws, tags)
   listing?: ListingResult;
   status: ItemStatus;
   error?: string;
@@ -83,6 +87,7 @@ export interface ItemGroup {
   postStatus?: PostStatus;
   listingId?: string;
   postError?: string;
+  postedCondition?: string; // condition eBay actually listed it under
   itemCost?: number; // seller cost basis in dollars, default 10
 }
 
