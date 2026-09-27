@@ -5,7 +5,14 @@ import { fetchAccountSetup, publishListing } from "@/lib/ebay/publish";
 import type { PublishInput } from "@/lib/ebay/publish";
 
 // Photo upload + several eBay calls + recovery loops — give it room.
-export const maxDuration = 120;
+// Was 120s; raised to match analyze's 300s ceiling after a real
+// FUNCTION_INVOCATION_TIMEOUT on a publish that stacked multiple recovery
+// rounds (each a real eBay round trip, worse when eBay's own metadata/
+// taxonomy service is running slow — the same slowness independently
+// showed up as "Could not verify Size" on unrelated items that same
+// night). 120s left no margin for a bad night on eBay's end; 280s does,
+// while staying under the Pro-plan 300s hard ceiling.
+export const maxDuration = 280;
 
 export async function POST(req: NextRequest) {
   // Check access + rate limit BEFORE parsing the (potentially large) body.

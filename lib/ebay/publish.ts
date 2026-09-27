@@ -1572,6 +1572,7 @@ function normalizePolicyName(name: string): string {
     .trim()
     .toLowerCase()
     .replace(/\s*\(\d+\s*listings?\)\s*$/i, "") // strip trailing "(2679 listings)"
+    .replace(/[^a-z0-9\s]/g, "") // drop punctuation (colons, dashes, apostrophes...)
     .replace(/\s+/g, " "); // collapse whitespace
 }
 
@@ -1581,7 +1582,12 @@ function pickFirstPolicy(r: EbayResp, listKey: string, idField: string): string 
   return list.length ? String(list[0][idField] || "") : "";
 }
 
-function pickNamedFulfillmentPolicy(r: EbayResp, targetName: string, fallbackToFirst = true): string {
+function pickNamedFulfillmentPolicy(
+  r: EbayResp,
+  targetName: string,
+  fallbackToFirst = true,
+  keywordFallback?: string
+): string {
   if (!r.ok) return "";
   const list: any[] = r.json?.fulfillmentPolicies || [];
   const target = normalizePolicyName(targetName);
@@ -1589,7 +1595,18 @@ function pickNamedFulfillmentPolicy(r: EbayResp, targetName: string, fallbackToF
   // ONLY for the primary policy — the fragrance policy has no sensible
   // fallback, since "just pick some other shipping policy" for a hazmat-
   // restricted item risks the exact rejection this exists to avoid.
-  const match = list.find((p) => normalizePolicyName(p.name || "") === target);
+  let match = list.find((p) => normalizePolicyName(p.name || "") === target);
+  // The exact-name match went stale once already (the Bvlgari gift-set
+  // rejection below happened AFTER this fix first shipped, meaning the
+  // account's real policy name doesn't collapse to an identical string —
+  // extra punctuation, a slightly different label, etc.). Rather than
+  // guess at the exact wording again, fall back to a keyword match on the
+  // one word that actually matters ("ground advantage"), which survives
+  // small naming differences the exact match doesn't.
+  if (!match && keywordFallback) {
+    const kw = normalizePolicyName(keywordFallback);
+    match = list.find((p) => normalizePolicyName(p.name || "").includes(kw));
+  }
   const chosen = match || (fallbackToFirst ? list[0] : null);
   return chosen ? String(chosen.fulfillmentPolicyId || "") : "";
 }
@@ -1621,7 +1638,7 @@ export async function fetchAccountSetup(accessToken: string): Promise<AccountSet
     fulfillmentPolicyId = pickNamedFulfillmentPolicy(ful, FULFILLMENT_POLICY_NAME, true);
     // No fallback-to-first here — both come from the same response, so
     // this doesn't cost another retry round if it's missing.
-    fragrancePolicyId = pickNamedFulfillmentPolicy(ful, FRAGRANCE_FULFILLMENT_POLICY_NAME, false);
+    fragrancePolicyId = pickNamedFulfillmentPolicy(ful, FRAGRANCE_FULFILLMENT_POLICY_NAME, false, "ground advantage");
     paymentPolicyId = pickFirstPolicy(pay, "paymentPolicies", "paymentPolicyId");
     returnPolicyId = pickFirstPolicy(ret, "returnPolicies", "returnPolicyId");
     if (fulfillmentPolicyId && paymentPolicyId && returnPolicyId) break;
@@ -1694,6 +1711,29 @@ export async function publishListing(
   input: PublishInput
 ): Promise<PublishResult> {
   const { sku, listing } = input;
+
+  // Fail fast and clearly, instead of silently submitting the standard
+  // multi-service shipping policy on a hazmat-restricted item and letting
+  // eBay's own rejection be the only signal. This happened for real (the
+  // Bvlgari Eau Parfumee gift set) even with the fragrance detection and
+  // dedicated policy both in place — the account's shipping policy name
+  // didn't collapse to an identical string, so the lookup silently came
+  // back empty and fell through to the standard policy, guaranteeing the
+  // same hazmat rejection all over again. Surface that mismatch here so
+  // it's obvious in-app rather than as a raw eBay error.
+  if (isFragranceItem(listing) && !setup.fragrancePolicyId) {
+    return {
+      success: false,
+      sku,
+      error:
+        `This item was detected as a fragrance/cologne/aftershave, which eBay ` +
+        `only allows to ship via USPS Ground Advantage — but no shipping policy ` +
+        `matching "USPS Ground Advantage Only" was found in your eBay account. ` +
+        `Check the exact name of that policy in Seller Hub > Business Policies ` +
+        `and let me know if it differs, so the app can match it correctly.`,
+    };
+  }
+
   let catKey = String(listing.category || "other");
   // Safety net: prompt guidance alone has proven insufficient to stop
   // clothing items occasionally getting classified as the generic

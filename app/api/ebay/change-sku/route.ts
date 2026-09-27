@@ -20,9 +20,10 @@ interface ChangeSkuInput extends Partial<PublishInput> {
   sku: string;
 }
 
-// This ends up doing a full republish under the hood — give it the same
-// room as /api/ebay/publish.
-export const maxDuration = 120;
+// This ends up doing a full republish under the hood, plus (when the item
+// isn't in the app's current batch) an extra pair of GETs to rebuild the
+// listing from eBay first — give it the same headroom as /api/ebay/publish.
+export const maxDuration = 280;
 
 export async function POST(req: NextRequest) {
   const denied = guardApiRequest(req);
