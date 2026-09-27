@@ -132,43 +132,72 @@ export async function categoryAspects(categoryId: string): Promise<AspectMeta[]>
   }
 }
 
-const condCache = new Map<string, Set<number>>();
+export interface ConditionOption {
+  id: number;
+  name: string; // eBay's conditionDescription, e.g. "New with tags", "Pre-owned"
+}
+
+export interface ConditionPolicy {
+  required: boolean; // eBay's itemConditionRequired for this category
+  conditions: ConditionOption[];
+}
+
+const condCache = new Map<string, ConditionPolicy>();
+
+// A leaf category's condition policy (Sell Metadata API). Unlike the helpers
+// above this THROWS on failure, so callers that must tell "lookup failed"
+// apart from "no conditions" (the inspect-category diagnostic) can.
+export async function conditionPolicy(categoryId: string): Promise<ConditionPolicy> {
+  if (!categoryId) throw new Error("No category id");
+  const cached = condCache.get(categoryId);
+  if (cached) return cached;
+  const token = await appToken();
+  const url =
+    `${EBAY_META_BASE}/marketplace/${EBAY_MARKETPLACE_ID}` +
+    `/get_item_condition_policies?filter=categoryIds:%7B${encodeURIComponent(categoryId)}%7D`;
+  const resp = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Accept-Language": "en-US",
+    },
+  });
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    throw new Error(`eBay condition policy lookup failed (${resp.status}) ${body.slice(0, 300)}`.trim());
+  }
+  const data = await resp.json().catch(() => null);
+  const policies = data?.itemConditionPolicies;
+  if (!Array.isArray(policies) || !policies.length) {
+    throw new Error(`eBay returned no condition policy for category ${categoryId}`);
+  }
+  const byId = new Map<number, ConditionOption>();
+  let required = false;
+  for (const p of policies) {
+    if (p?.itemConditionRequired) required = true;
+    for (const c of p?.itemConditions ?? []) {
+      const id = Number(c?.conditionId);
+      if (id && !byId.has(id)) {
+        byId.set(id, { id, name: String(c?.conditionDescription ?? "").trim() });
+      }
+    }
+  }
+  const policy = { required, conditions: [...byId.values()].sort((a, b) => a.id - b.id) };
+  // Only cache a non-empty result, same reasoning as categoryAspects.
+  if (policy.conditions.length) condCache.set(categoryId, policy);
+  return policy;
+}
 
 // Numeric condition IDs eBay accepts for a leaf category (Sell Metadata API).
 // Lets us pick a condition the category actually allows — fashion leaves reject
 // the classic USED_VERY_GOOD/GOOD/ACCEPTABLE ids (4000/5000/6000), accepting
 // only New variants plus 2990/3000/3010, which is the source of error 25021.
+// Best-effort: returns an empty set on any failure (publish falls back).
 export async function acceptedConditionIds(categoryId: string): Promise<Set<number>> {
   if (!categoryId) return new Set();
-  const cached = condCache.get(categoryId);
-  // Same bug as categoryAspects had earlier: an empty Set is truthy in JS,
-  // so `if (cached)` was treating "we cached nothing" the same as "we
-  // cached a real result" — permanently serving an empty set after any
-  // transient failure, for the life of the warm server instance.
-  if (cached && cached.size) return cached;
   try {
-    const token = await appToken();
-    const url =
-      `${EBAY_META_BASE}/marketplace/${EBAY_MARKETPLACE_ID}` +
-      `/get_item_condition_policies?filter=categoryIds:%7B${encodeURIComponent(categoryId)}%7D`;
-    const resp = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-        "Accept-Language": "en-US",
-      },
-    });
-    if (!resp.ok) return new Set();
-    const data = await resp.json().catch(() => null);
-    const ids = new Set<number>();
-    for (const p of data?.itemConditionPolicies ?? [])
-      for (const c of p?.itemConditions ?? []) {
-        const n = Number(c?.conditionId);
-        if (n) ids.add(n);
-      }
-    // Only cache a non-empty result, same reasoning as categoryAspects.
-    if (ids.size) condCache.set(categoryId, ids);
-    return ids;
+    const { conditions } = await conditionPolicy(categoryId);
+    return new Set(conditions.map((c) => c.id));
   } catch {
     return new Set();
   }

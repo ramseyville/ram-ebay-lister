@@ -28,8 +28,17 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { categoryAspects } = await import("@/lib/ebay/taxonomy");
-    const aspects = await categoryAspects(id);
+    const { categoryAspects, conditionPolicy } = await import("@/lib/ebay/taxonomy");
+    // Conditions come from a separate API (Sell Metadata); a failure there
+    // is reported as conditionError rather than an empty list, so it can't
+    // be mistaken for "this category takes no conditions".
+    const [aspects, cond] = await Promise.all([
+      categoryAspects(id),
+      conditionPolicy(id).then(
+        (policy) => ({ policy, error: null as string | null }),
+        (e) => ({ policy: null, error: (e as Error).message })
+      ),
+    ]);
     // Surface Size/Size Type first since that's almost always why this is
     // being checked, but return everything — a rejected aspect isn't
     // always the one we expected.
@@ -40,6 +49,9 @@ export async function GET(req: NextRequest) {
       categoryId: id,
       sizeRelated,
       other,
+      conditionRequired: cond.policy ? cond.policy.required : null,
+      conditions: cond.policy ? cond.policy.conditions : null,
+      ...(cond.error ? { conditionError: cond.error } : {}),
     });
   } catch (e) {
     return NextResponse.json({ success: false, error: (e as Error).message }, { status: 500 });
