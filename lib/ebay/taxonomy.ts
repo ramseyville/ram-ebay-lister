@@ -29,6 +29,11 @@ export interface AspectMeta {
   required: boolean;
   mode: AspectMode;
   values: string[]; // eBay's allowed/suggested values (full list for SELECTION_ONLY)
+  // eBay's per-value dependencies (aspectValues[].valueConstraints): value →
+  // { otherAspectName: [values it's valid with] }. E.g. on Size, "34" →
+  // { "Size Type": ["Plus"] } means Size 34 only pairs with Size Type Plus.
+  // Only present for values eBay constrains.
+  valueConstraints?: Record<string, Record<string, string[]>>;
 }
 
 // ── App token (client-credentials), cached in the warm lambda ────────────────
@@ -112,6 +117,20 @@ export async function categoryAspects(categoryId: string): Promise<AspectMeta[]>
       const con = a?.aspectConstraint ?? {};
       const name = String(a?.localizedAspectName ?? "").trim();
       if (!name) continue;
+      const valueConstraints: Record<string, Record<string, string[]>> = {};
+      for (const v of a?.aspectValues ?? []) {
+        const value = String(v?.localizedValue ?? "").trim();
+        if (!value) continue;
+        for (const c of v?.valueConstraints ?? []) {
+          const other = String(c?.applicableForLocalizedAspectName ?? "").trim();
+          const allowed = (c?.applicableForLocalizedAspectValues ?? [])
+            .map((x: any) => String(x ?? "").trim())
+            .filter(Boolean);
+          if (!other || !allowed.length) continue;
+          const forValue = (valueConstraints[value] ??= {});
+          forValue[other] = Array.from(new Set([...(forValue[other] ?? []), ...allowed]));
+        }
+      }
       out.push({
         name,
         required: Boolean(con?.aspectRequired),
@@ -119,6 +138,7 @@ export async function categoryAspects(categoryId: string): Promise<AspectMeta[]>
         values: (a?.aspectValues ?? [])
           .map((v: any) => String(v?.localizedValue ?? "").trim())
           .filter(Boolean),
+        ...(Object.keys(valueConstraints).length ? { valueConstraints } : {}),
       });
     }
     // Only cache non-empty results — a genuinely empty response (rare, but

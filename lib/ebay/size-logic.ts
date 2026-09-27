@@ -15,6 +15,7 @@
 // directly in front of it at the time.
 
 import type { ListingResult } from "@/lib/types";
+import type { AspectMeta } from "./taxonomy";
 
 export const APPAREL_CATEGORIES = new Set([
   "womens_top", "womens_dress", "womens_skirt", "womens_pants", "womens_coat",
@@ -119,6 +120,56 @@ export function sizeTypeCandidates(rawSize: string, catKey: string): string[] {
     if (waistMatch && parseInt(waistMatch[1], 10) >= 44) return ["Big & Tall", "Tall"];
   }
   return ["Regular"];
+}
+
+// Every Size Type worth trying for a size, best guess first: the inferred
+// candidates, then the category's remaining standard types. Used when eBay
+// rejects a Size/Size Type pairing and we have nothing better to go on.
+export function sizeTypeFallbacks(rawSize: string, catKey: string): string[] {
+  const rest = catKey.startsWith("womens_")
+    ? ["Regular", "Plus", "Petites"]
+    : ["Regular", "Big & Tall", "Tall"];
+  const out: string[] = [];
+  for (const t of [...sizeTypeCandidates(rawSize, catKey), ...rest]) {
+    if (!out.some((o) => o.toLowerCase() === t.toLowerCase())) out.push(t);
+  }
+  return out;
+}
+
+const sameText = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+// The Size Types eBay says a specific Size value is valid with, from the
+// category's aspect metadata (Size → valueConstraints → "Size Type"), or
+// null when eBay doesn't constrain that value.
+export function constrainedSizeTypes(meta: AspectMeta[], size: string): string[] | null {
+  const byValue = meta.find((a) => a.name === "Size")?.valueConstraints;
+  if (!byValue || !size) return null;
+  const valueKey = Object.keys(byValue).find((k) => sameText(k, size));
+  if (!valueKey) return null;
+  const deps = byValue[valueKey];
+  const typeKey = Object.keys(deps).find((k) => sameText(k, "Size Type"));
+  return typeKey && deps[typeKey].length ? deps[typeKey] : null;
+}
+
+// If the current Size Type isn't one eBay allows for this Size, return the
+// allowed one to use instead (first preferred match, else eBay's first);
+// null when no change is needed or eBay publishes no constraint for it.
+// eBay rejects an incompatible pairing with 25129 ("Regular is not a valid
+// Size Type for the Size 34"), so this is checked before submitting.
+export function compatibleSizeType(
+  meta: AspectMeta[],
+  size: string,
+  currentType: string,
+  preferred: string[]
+): string | null {
+  const allowed = constrainedSizeTypes(meta, size);
+  if (!allowed) return null;
+  if (currentType && allowed.some((a) => sameText(a, currentType))) return null;
+  for (const p of preferred) {
+    const hit = allowed.find((a) => sameText(a, p));
+    if (hit) return hit;
+  }
+  return allowed[0];
 }
 
 export function inferSizeType(rawSize: string, catKey: string): string {

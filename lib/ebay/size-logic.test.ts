@@ -20,7 +20,11 @@ import {
   looksLikeSizeCode,
   sizeAspectValue,
   isFragranceItem,
+  sizeTypeFallbacks,
+  constrainedSizeTypes,
+  compatibleSizeType,
 } from "./size-logic";
+import type { AspectMeta } from "./taxonomy";
 
 describe("cleanSizeBase", () => {
   it("leaves O/S untouched (not bilingual notation)", () => {
@@ -231,5 +235,50 @@ describe("isFragranceItem", () => {
         title: "Nike Sportswear Womens Brown Cropped Oversized Fleece Quarter Zip Pullover S NWT",
       } as any)
     ).toBe(false);
+  });
+});
+
+// Ariat R.E.A.L. Denim womens jeans, Size 34, category 11554: publish failed
+// with 25129 "Regular is not a valid Size Type for the Size 34" — flagged
+// under "Size", so the old Size Type rotation never ran, and a bare womens
+// "34" only ever had ["Regular"] to try anyway.
+describe("Size / Size Type pairing (eBay valueConstraints)", () => {
+  const meta: AspectMeta[] = [
+    {
+      name: "Size",
+      required: true,
+      mode: "SELECTION_ONLY",
+      values: ["28", "34"],
+      valueConstraints: {
+        "28": { "Size Type": ["Regular", "Petites"] },
+        "34": { "Size Type": ["Plus"] },
+      },
+    },
+    { name: "Size Type", required: true, mode: "SELECTION_ONLY", values: ["Regular", "Plus", "Petites"] },
+  ];
+
+  it("reads the Size Types eBay allows for a Size value", () => {
+    expect(constrainedSizeTypes(meta, "34")).toEqual(["Plus"]);
+    expect(constrainedSizeTypes(meta, "30")).toBeNull();
+    expect(constrainedSizeTypes([], "34")).toBeNull();
+  });
+
+  it("swaps an incompatible Size Type for one eBay allows", () => {
+    expect(compatibleSizeType(meta, "34", "Regular", sizeTypeFallbacks("34", "womens_jeans"))).toBe("Plus");
+  });
+
+  it("leaves a compatible or unconstrained pairing alone", () => {
+    expect(compatibleSizeType(meta, "28", "Regular", ["Regular"])).toBeNull();
+    expect(compatibleSizeType(meta, "30", "Regular", ["Regular"])).toBeNull();
+  });
+
+  it("prefers the inferred type when several are allowed", () => {
+    expect(compatibleSizeType(meta, "28", "Plus", ["Petites", "Regular"])).toBe("Petites");
+  });
+
+  it("offers every standard type to rotate through after a rejection", () => {
+    expect(sizeTypeFallbacks("34", "womens_jeans")).toEqual(["Regular", "Plus", "Petites"]);
+    expect(sizeTypeFallbacks("XLT", "mens_top")).toEqual(["Tall", "Big & Tall", "Regular"]);
+    expect(sizeTypeFallbacks("M", "mens_top")).toEqual(["Regular", "Big & Tall", "Tall"]);
   });
 });

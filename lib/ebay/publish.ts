@@ -38,6 +38,8 @@ import {
   sizeParts,
   isExtendedSize,
   sizeTypeCandidates,
+  sizeTypeFallbacks,
+  compatibleSizeType,
   inferSizeType,
   normalizeExtendedSize,
   sizeCandidates,
@@ -854,6 +856,17 @@ function extractUnsupportedAspects(r: EbayResp): string[] {
     }
   }
   return Array.from(new Set(names));
+}
+
+// 25129 whose text says the Size/Size Type combination is invalid, e.g.
+// "Regular is not a valid Size Type for the Size 34" — even when the
+// aspect eBay names in the error is "Size".
+function sizeTypePairingRejected(r: EbayResp): boolean {
+  return (r.json?.errors || []).some((err: any) => {
+    if (Number(err.errorId) !== 25129) return false;
+    const hay = [err.message, err.longMessage, ...(err.parameters || []).map((p: any) => String(p.value || ""))].join(" | ");
+    return /not a valid Size Type|Size Type you selected is not compatible/i.test(hay);
+  });
 }
 
 function extractMissingAspects(r: EbayResp): string[] {
@@ -1845,6 +1858,7 @@ export async function publishListing(
   // going out. Non-size categories (collectibles, hard goods, etc.) still
   // proceed on a metadata failure — there's no size-enforcement risk there.
   let condPolicy: ConditionPolicy | null = null;
+  let aspectMeta: AspectMeta[] = [];
   let metaOk = false;
   for (let attempt = 0; attempt < 2 && !metaOk; attempt++) {
     try {
@@ -1856,6 +1870,7 @@ export async function publishListing(
       ]);
       if (meta.length) {
         reconcileAspects(aspects, meta, listing, catKey);
+        aspectMeta = meta;
         metaOk = true;
       }
       condPolicy = policy;
@@ -1912,6 +1927,21 @@ export async function publishListing(
   // corrected suffix format eBay's own listings actually use (5XL, not 5X).
   if (SIZE_ENFORCED_CATEGORIES.has(catKey) && !aspects["Size"]?.length && listing.size) {
     aspects["Size"] = [sizeAspectValue(String(listing.size), catKey)];
+  }
+  // Final word on the Size/Size Type PAIRING goes to eBay's own metadata:
+  // each Size value can carry a constraint listing the Size Types it's
+  // valid with. Our inference can't know eBay's taxonomy quirks (confirmed
+  // live: womens jeans 11554 rejected "Regular" for Size 34 with 25129), so
+  // when eBay publishes a constraint, obey it — runs after every inference
+  // path above, including the extended-size invariant.
+  if (SIZE_ENFORCED_CATEGORIES.has(catKey) && aspects["Size"]?.[0]) {
+    const compatible = compatibleSizeType(
+      aspectMeta,
+      aspects["Size"][0],
+      aspects["Size Type"]?.[0] || "",
+      sizeTypeFallbacks(String(listing.size || ""), catKey)
+    );
+    if (compatible) aspects["Size Type"] = [compatible];
   }
   // Resolve the grade (AI- or seller-chosen) to condition IDs this leaf
   // category accepts, closest first. The first is what we submit; the rest
@@ -2380,6 +2410,7 @@ async function publishOfferWithRecovery(
   // "missing" error that hid what actually went wrong. Better to surface
   // the real rejection than mask it with a misleading one.
   const NEVER_STRIP = new Set(["Size", "Size Type"]);
+  const triedSizeTypes = new Set<string>();
   for (let round = 0; round < 3 && eids.includes(25129); round++) {
     // Size Type gets special handling: instead of stripping it (protected,
     // like Size), rotate to the OTHER plausible candidate. eBay's live
@@ -2388,16 +2419,22 @@ async function publishOfferWithRecovery(
     // Tall" while our first-choice candidate was "Tall") — so if the
     // candidate we chose gets rejected, the fix is trying the alternate,
     // not giving up on the field entirely.
-    if (extractUnsupportedAspects(r).includes("Size Type")) {
+    // eBay sometimes flags the pairing under "Size" with the real reason
+    // only in the parameters ("Regular is not a valid Size Type for the
+    // Size 34") — treat that as a Size Type rejection too.
+    if (extractUnsupportedAspects(r).includes("Size Type") || sizeTypePairingRejected(r)) {
       const current = ctx.aspects["Size Type"]?.[0] || "";
+      if (current) triedSizeTypes.add(current.toLowerCase());
       // Use the ORIGINAL raw size string here, not ctx.aspects["Size"] —
       // for dress shirts that's already been reduced to just the neck
       // number ("19"), which has lost the "Tall" signal that only existed
       // in the full original string ("19 36/37 Tall"). Regenerating
       // candidates from the stripped value was picking the wrong fallback
       // ("Regular") because the signal was already gone by this point.
-      const candidates = sizeTypeCandidates(ctx.rawSize, ctx.catKey);
-      const next = candidates.find((c) => c.toLowerCase() !== current.toLowerCase());
+      // Rotate through every standard type for the category, never
+      // re-trying one eBay already rejected this publish.
+      const candidates = sizeTypeFallbacks(ctx.rawSize, ctx.catKey);
+      const next = candidates.find((c) => !triedSizeTypes.has(c.toLowerCase()));
       if (next) {
         ctx.aspects["Size Type"] = [next];
         ctx.inventoryItem.product.aspects = ctx.aspects;
