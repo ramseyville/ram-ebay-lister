@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardApiRequest } from "@/lib/api-guard";
 import Anthropic from "@anthropic-ai/sdk";
+import { conditionIdCandidates } from "@/lib/conditions";
+import { APPAREL_CATEGORIES } from "@/lib/ebay/size-logic";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,17 +13,19 @@ async function fetchEbayComps(
   brand: string,
   itemType: string,
   size: string,
-  condition: string
+  condition: string,
+  category: string
 ): Promise<string> {
   const clientId = process.env.EBAY_CLIENT_ID;
   if (!clientId) return "eBay comps unavailable (no API key).";
 
   const keywords = [brand, itemType, size].filter(Boolean).join(" ");
-  const conditionId =
-    condition?.includes("NEW") ? "1000" :
-    condition?.includes("EXCELLENT") ? "3000" :
-    condition?.includes("VERY_GOOD") ? "4000" :
-    condition?.includes("GOOD") ? "5000" : "3000";
+  // Same grade → condition ID resolution publish uses, so comps are filtered
+  // on the condition this item will actually list under (apparel: Excellent
+  // 2990 / Good 3000 / Fair 3010; elsewhere the classic Used/Good scale).
+  const conditionId = String(
+    conditionIdCandidates(condition, new Set(), APPAREL_CATEGORIES.has(category))[0]
+  );
 
   try {
     const url = new URL("https://svcs.ebay.com/services/search/FindingService/v1");
@@ -67,6 +71,7 @@ export async function POST(req: NextRequest) {
       brand?: string;
       item_type?: string;
       size?: string;
+      category?: string;
       condition?: string;
       condition_notes?: string;
       color?: string | string[];
@@ -83,7 +88,8 @@ export async function POST(req: NextRequest) {
     listing.brand ?? "",
     listing.item_type ?? listing.title ?? "",
     listing.size ?? "",
-    listing.condition ?? ""
+    listing.condition ?? "",
+    listing.category ?? ""
   );
 
   const color = Array.isArray(listing.color) ? listing.color.join("/") : (listing.color ?? "");

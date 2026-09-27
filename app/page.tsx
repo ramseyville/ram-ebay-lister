@@ -344,25 +344,12 @@ export default function Home() {
           shipping_dimensions: shippingEst.dimensions,
         };
 
-        // Attempt eBay category ID lookup via Taxonomy API (best-effort,
-        // requires eBay dev keys — silently skips if not configured)
-        let finalListing = enrichedListing;
-        try {
-          const hint = enrichedListing.category_hint || enrichedListing.title || "";
-          if (hint && !enrichedListing.category_id) {
-            const catRes = await fetch(
-              `/api/ebay/taxonomy?q=${encodeURIComponent(hint)}`
-            );
-            if (catRes.ok) {
-              const catData = (await catRes.json()) as { categoryId?: string };
-              if (catData.categoryId) {
-                finalListing = { ...enrichedListing, category_id: catData.categoryId };
-              }
-            }
-          }
-        } catch {
-          // Category lookup is best-effort — never fail a write because of it
-        }
+        // No client-side category_id lookup here. An explicit category_id
+        // outranks the AI's category classification at publish
+        // (resolveCategory), and a title-keyword suggestion is exactly what
+        // publish deliberately stopped trusting over that classification —
+        // publish resolves the leaf category itself.
+        const finalListing = enrichedListing;
 
         setGroups((prev) =>
           prev.map((g) =>
