@@ -49,10 +49,13 @@ function isWebSearchDisabledError(e: unknown): boolean {
   const msg = String((e as any)?.message ?? e ?? "").toLowerCase();
   return msg.includes("web search") && (msg.includes("not enabled") || msg.includes("disabled"));
 }
+// Capped at 2 (was 4) for the initial rollout — each search is a real,
+// serial round trip, so this bounds the worst-case added latency while we
+// confirm the speed trade-off is acceptable before raising it back up.
 function searchTools(): Anthropic.Messages.ToolUnion[] {
   return webSearchUnavailable
     ? []
-    : [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }];
+    : [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }];
 }
 
 function toImageBlocks(images: AnalyzeRequestBody["images"]): ImageBlock[] {

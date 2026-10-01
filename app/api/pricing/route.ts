@@ -156,9 +156,12 @@ OUTPUT:
     response = await client.messages.create({
       model: "claude-sonnet-5",
       max_tokens: 1536,
+      // Capped at 2 (was 3) for the initial rollout — same reasoning as
+      // analyze/route.ts's searchTools(): bound the worst-case added
+      // latency until the speed trade-off is confirmed acceptable.
       tools: webSearchUnavailable
         ? undefined
-        : [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+        : [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
       messages: [{ role: "user", content: [...imageBlocks, textBlock] }],
     });
   } catch (err) {
