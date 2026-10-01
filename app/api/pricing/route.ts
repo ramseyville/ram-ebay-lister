@@ -6,7 +6,12 @@ import { APPAREL_CATEGORIES } from "@/lib/ebay/size-logic";
 import { searchActiveListings } from "@/lib/ebay/taxonomy";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Was 60s, set before this route did any web search. Up to 3 real search
+// round-trips (plus image analysis) can now legitimately exceed that —
+// found this gap while investigating a same-night FUNCTION_INVOCATION_TIMEOUT
+// report right after web search shipped. Raised with real margin, same
+// reasoning as the earlier publish/change-sku timeout fix.
+export const maxDuration = 150;
 
 const client = new Anthropic();
 
