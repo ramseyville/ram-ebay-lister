@@ -28,6 +28,27 @@ const ROUTER_MODEL = "claude-haiku-4-5-20251001";
 const REPAIR_MODEL = "claude-haiku-4-5-20251001";
 const MAX_IMAGES = 5; // front, back, tag, detail, one more — sufficient for a complete listing
 
+// Web search requires the capability to be enabled on this API key's
+// Anthropic Console organization (Settings → Capabilities) — it is NOT
+// guaranteed on by default. When it isn't enabled, every request that
+// includes the tool fails immediately and completely with
+// `400 "Web search is not enabled"` — not intermittent, every single call.
+// That's a much harsher failure mode than "slightly slower," so this app
+// cannot assume the capability is on. Once detected, skip the tool for the
+// rest of this warm lambda instance so the app keeps working (just without
+// the research upgrade) instead of hard-failing every listing until
+// someone notices and redeploys.
+let webSearchUnavailable = false;
+function isWebSearchDisabledError(e: unknown): boolean {
+  const msg = String((e as any)?.message ?? e ?? "").toLowerCase();
+  return msg.includes("web search") && (msg.includes("not enabled") || msg.includes("disabled"));
+}
+function searchTools(): Anthropic.Messages.ToolUnion[] {
+  return webSearchUnavailable
+    ? []
+    : [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }];
+}
+
 function toImageBlocks(images: AnalyzeRequestBody["images"]): ImageBlock[] {
   const blocks: ImageBlock[] = [];
   for (const img of images.slice(0, MAX_IMAGES)) {
@@ -218,7 +239,7 @@ export async function POST(req: NextRequest) {
           // Bounded to a handful of uses per item to keep cost and latency
           // in check — this isn't meant to research exhaustively, just to
           // verify the specific, nameable product the photos show.
-          tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+          tools: searchTools(),
           // System prompt is large and identical across requests for the same
           // profile — cache it to cut cost and latency.
           system: [
@@ -249,7 +270,7 @@ export async function POST(req: NextRequest) {
           finalResp = await client.messages.create({
             model: ANALYSIS_MODEL,
             max_tokens: 8000,
-            tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+            tools: searchTools(),
             system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
             messages: [{
               role: "user",
@@ -288,6 +309,11 @@ export async function POST(req: NextRequest) {
       } catch (err) {
         const fatal = anthropicAuthError(err);
         if (fatal) throw fatal; // auth/billing won't fix itself on retry
+        if (isWebSearchDisabledError(err) && !webSearchUnavailable) {
+          webSearchUnavailable = true;
+          console.error("[analyze] web search is not enabled for this account — disabling it and retrying without it");
+          continue; // retry immediately without the tool, don't burn the backoff delay on a known cause
+        }
         lastErr = err;
         console.error(`[analyze] attempt ${attempt + 1} failed:`, err);
         if (attempt < 2) {

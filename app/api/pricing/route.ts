@@ -15,6 +15,16 @@ export const maxDuration = 150;
 
 const client = new Anthropic();
 
+// Same web-search-capability guard as analyze/route.ts: this fails hard and
+// completely (400 "Web search is not enabled") rather than gracefully if
+// the capability isn't turned on for this API key's Console organization,
+// so this route can't assume it's available any more than analyze can.
+let webSearchUnavailable = false;
+function isWebSearchDisabledError(e: unknown): boolean {
+  const msg = String((e as any)?.message ?? e ?? "").toLowerCase();
+  return msg.includes("web search") && (msg.includes("not enabled") || msg.includes("disabled"));
+}
+
 // Every "Comp lookup failed — no data returned (JSON error)" result this app
 // has ever produced traces back to this function calling eBay's legacy
 // Finding API (svcs.ebay.com/.../FindingService), which eBay confirms hit
@@ -139,12 +149,29 @@ OUTPUT:
 **Notes:** Scarcity premium, condition flags, or data gaps`,
   };
 
-  const response = await client.messages.create({
-    model: "claude-sonnet-5",
-    max_tokens: 1536,
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
-    messages: [{ role: "user", content: [...imageBlocks, textBlock] }],
-  });
+  let response;
+  try {
+    response = await client.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 1536,
+      tools: webSearchUnavailable
+        ? undefined
+        : [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+      messages: [{ role: "user", content: [...imageBlocks, textBlock] }],
+    });
+  } catch (err) {
+    if (isWebSearchDisabledError(err) && !webSearchUnavailable) {
+      webSearchUnavailable = true;
+      console.error("[pricing] web search is not enabled for this account — disabling it and retrying without it");
+      response = await client.messages.create({
+        model: "claude-sonnet-5",
+        max_tokens: 1536,
+        messages: [{ role: "user", content: [...imageBlocks, textBlock] }],
+      });
+    } else {
+      throw err;
+    }
+  }
 
   const text = response.content
     .filter((b) => b.type === "text")
