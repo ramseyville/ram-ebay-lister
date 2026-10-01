@@ -15,11 +15,13 @@ export const maxDuration = 150;
 
 const client = new Anthropic();
 
-// Same web-search-capability guard as analyze/route.ts: this fails hard and
-// completely (400 "Web search is not enabled") rather than gracefully if
-// the capability isn't turned on for this API key's Console organization,
-// so this route can't assume it's available any more than analyze can.
-let webSearchUnavailable = false;
+// Same web-search-capability guard as analyze/route.ts, including the
+// explicit opt-in default-off reasoning (serverless cold starts make a
+// purely reactive catch-and-retry pay for a failing round trip on most
+// requests, not just the first one) — see that file's comment for the
+// full explanation. Same env var controls both routes.
+const WEB_SEARCH_OPT_IN = process.env.ENABLE_WEB_SEARCH === "true";
+let webSearchUnavailable = !WEB_SEARCH_OPT_IN;
 function isWebSearchDisabledError(e: unknown): boolean {
   const msg = String((e as any)?.message ?? e ?? "").toLowerCase();
   return msg.includes("web search") && (msg.includes("not enabled") || msg.includes("disabled"));

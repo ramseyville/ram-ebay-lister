@@ -33,12 +33,18 @@ const MAX_IMAGES = 5; // front, back, tag, detail, one more — sufficient for a
 // guaranteed on by default. When it isn't enabled, every request that
 // includes the tool fails immediately and completely with
 // `400 "Web search is not enabled"` — not intermittent, every single call.
-// That's a much harsher failure mode than "slightly slower," so this app
-// cannot assume the capability is on. Once detected, skip the tool for the
-// rest of this warm lambda instance so the app keeps working (just without
-// the research upgrade) instead of hard-failing every listing until
-// someone notices and redeploys.
-let webSearchUnavailable = false;
+//
+// Defaulting this OFF and requiring an explicit opt-in (rather than just
+// reactively catching the failure) matters because Vercel serverless
+// functions don't reliably reuse a warm instance between requests —
+// right after a deploy especially, most requests hit a fresh instance, so
+// a purely reactive catch-and-retry pays for one guaranteed-failing round
+// trip per cold start, often forever, never actually getting faster. Set
+// ENABLE_WEB_SEARCH=true in Vercel once the capability is actually turned
+// on in Console settings; until then this never attempts it, so there's
+// no extra latency and no failed call hiding behind the scenes.
+const WEB_SEARCH_OPT_IN = process.env.ENABLE_WEB_SEARCH === "true";
+let webSearchUnavailable = !WEB_SEARCH_OPT_IN;
 function isWebSearchDisabledError(e: unknown): boolean {
   const msg = String((e as any)?.message ?? e ?? "").toLowerCase();
   return msg.includes("web search") && (msg.includes("not enabled") || msg.includes("disabled"));
