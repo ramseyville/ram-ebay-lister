@@ -3,12 +3,26 @@ import { guardApiRequest } from "@/lib/api-guard";
 import Anthropic from "@anthropic-ai/sdk";
 import { conditionIdCandidates } from "@/lib/conditions";
 import { APPAREL_CATEGORIES } from "@/lib/ebay/size-logic";
+import { searchActiveListings } from "@/lib/ebay/taxonomy";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const client = new Anthropic();
 
+// Every "Comp lookup failed — no data returned (JSON error)" result this app
+// has ever produced traces back to this function calling eBay's legacy
+// Finding API (svcs.ebay.com/.../FindingService), which eBay confirms hit
+// end-of-life in February 2025 (community.ebay.com/t5/RESTful-Buy-APIs-
+// Browse/Finding-API-EOL-in-February-2025). It never had a chance of
+// returning data — not eBay flakiness, a dead endpoint.
+//
+// Replaced with the Browse API (same app-level client-credentials token the
+// Taxonomy API calls already use). Important honesty note: Browse only
+// searches ACTIVE listings, not sold/completed ones — true sold-comp data
+// requires the restricted Marketplace Insights API, which this developer
+// account isn't approved for. So this now returns real, current competing
+// listings and prices rather than claiming "sold comps" it can't back up.
 async function fetchEbayComps(
   brand: string,
   itemType: string,
@@ -16,48 +30,24 @@ async function fetchEbayComps(
   condition: string,
   category: string
 ): Promise<string> {
-  const clientId = process.env.EBAY_CLIENT_ID;
-  if (!clientId) return "eBay comps unavailable (no API key).";
-
   const keywords = [brand, itemType, size].filter(Boolean).join(" ");
-  // Same grade → condition ID resolution publish uses, so comps are filtered
-  // on the condition this item will actually list under (apparel: Excellent
-  // 2990 / Good 3000 / Fair 3010; elsewhere the classic Used/Good scale).
-  const conditionId = String(
-    conditionIdCandidates(condition, new Set(), APPAREL_CATEGORIES.has(category))[0]
+  // Kept for reference/parity with the publish pipeline's own condition
+  // resolution, even though Browse API search doesn't filter by condition ID
+  // the way the old Finding API call did — left here in case a future
+  // revision adds a condition filter to the search itself.
+  void conditionIdCandidates(condition, new Set(), APPAREL_CATEGORIES.has(category));
+
+  const items = await searchActiveListings(keywords, 12);
+  if (!items.length) return "No current eBay active listings found for: " + keywords;
+
+  const compLines = items
+    .map((it) => `- ${it.price || "?"} — ${it.title}${it.condition ? ` (${it.condition})` : ""}`)
+    .join("\n");
+
+  return (
+    `CURRENT eBay ACTIVE LISTINGS for "${keywords}" (${items.length} found — ` +
+    `asking prices, NOT sold data; eBay's sold-comp API isn't available to this account):\n${compLines}`
   );
-
-  try {
-    const url = new URL("https://svcs.ebay.com/services/search/FindingService/v1");
-    url.searchParams.set("OPERATION-NAME", "findCompletedItems");
-    url.searchParams.set("SERVICE-VERSION", "1.0.0");
-    url.searchParams.set("SECURITY-APPNAME", clientId);
-    url.searchParams.set("RESPONSE-DATA-FORMAT", "JSON");
-    url.searchParams.set("keywords", keywords);
-    url.searchParams.set("itemFilter(0).name", "SoldItemsOnly");
-    url.searchParams.set("itemFilter(0).value", "true");
-    url.searchParams.set("itemFilter(1).name", "Condition");
-    url.searchParams.set("itemFilter(1).value", conditionId);
-    url.searchParams.set("sortOrder", "EndTimeSoonest");
-    url.searchParams.set("paginationInput.entriesPerPage", "15");
-
-    const res = await fetch(url.toString());
-    const data = await res.json();
-    const items = data?.findCompletedItemsResponse?.[0]?.searchResult?.[0]?.item ?? [];
-
-    if (!items.length) return "No recent eBay sold comps found for: " + keywords;
-
-    const compLines = items.slice(0, 12).map((item: any) => {
-      const price = item.sellingStatus?.[0]?.currentPrice?.[0]?.["__value__"];
-      const title = item.title?.[0];
-      const date  = item.listingInfo?.[0]?.endTime?.[0]?.slice(0, 10);
-      return "- $" + parseFloat(price).toFixed(2) + " — " + title + " (sold " + date + ")";
-    }).join("\n");
-
-    return "RECENT eBay SOLD COMPS (" + items.length + " found):\n" + compLines;
-  } catch (e) {
-    return "eBay comp lookup failed: " + (e as Error).message;
-  }
 }
 
 export async function POST(req: NextRequest) {
@@ -117,7 +107,7 @@ export async function POST(req: NextRequest) {
 
   const textBlock = {
     type: "text" as const,
-    text: `You are an expert eBay reseller pricing analyst. Analyze the photos and sold comp data to recommend a price.
+    text: `You are an expert eBay reseller pricing analyst. Analyze the photos and the real eBay listing data to recommend a price.
 
 ITEM:
 ${itemSummary}
@@ -127,14 +117,15 @@ ${comps}
 INSTRUCTIONS:
 - Study all photos: front shot shows overall condition; tag/label/hang tag photos show exact brand, size, material, and MSRP
 - The MSRP from the hang tag (if visible) is a key pricing anchor — note it prominently
-- Cross-reference the real eBay sold comps above
+- The listings above are CURRENT ACTIVE asking prices, not sold data — eBay's sold-comp API isn't available to this account. Use them as a ceiling/positioning signal, not a guarantee of what the item will actually sell for, and say so plainly rather than calling them "comps" or implying they're sold prices.
+- You have a real web_search tool. Use it — don't skip this — when the photos show enough distinguishing detail (brand + product line name, a style/fabric name on the tag, a distinctive construction detail) to identify the EXACT retail product: search for it, confirm the real current or original MSRP from the brand's own site or a reputable retailer, and note 2-3 specific keywords or phrasing that other real, currently-listed eBay sellers use for this same or a very similar item (search site:ebay.com plus the brand/product line). Cite what you actually found; never state a fact you didn't verify as if you looked it up.
 - Only compare same condition: pre-owned to pre-owned, NWT to NWT
 - Flag extended size scarcity premium (XL+, waist 38+) if applicable
-- If comps are thin, say so explicitly
+- If both the active-listing data and web search come up thin, say so explicitly — don't paper over a real data gap with a confident-sounding guess
 
 OUTPUT:
-**Comp Summary:** Price range, how many comps, recency
-**MSRP:** From hang tag if visible, or "not visible in photos"
+**Comp Summary:** Price range and count from the active listings above (labeled as asking prices, not sold prices), plus anything found via web search
+**MSRP:** From hang tag if visible, else from a verified web search result (name the source), else "not found"
 **Recommended BIN:** $X.XX with brief rationale
 **Best Offer:** Yes/No
 **Auto-accept floor:** $X.XX
@@ -145,7 +136,8 @@ OUTPUT:
 
   const response = await client.messages.create({
     model: "claude-sonnet-5",
-    max_tokens: 1024,
+    max_tokens: 1536,
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
     messages: [{ role: "user", content: [...imageBlocks, textBlock] }],
   });
 

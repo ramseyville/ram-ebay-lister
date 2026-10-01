@@ -15,6 +15,7 @@
 import {
   EBAY_TAX_BASE,
   EBAY_META_BASE,
+  EBAY_BUY_BASE,
   EBAY_MARKETPLACE_ID,
   EBAY_CATEGORY_TREE_ID,
   EBAY_TOKEN_URL,
@@ -40,7 +41,10 @@ export interface AspectMeta {
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
-async function appToken(): Promise<string> {
+// Exported so other read-only, app-level eBay lookups (the Browse API
+// search below, used for pricing) can reuse the same cached token instead
+// of duplicating the client-credentials flow.
+export async function appToken(): Promise<string> {
   const now = Date.now();
   if (cachedToken && cachedToken.expiresAt > now + 60_000) return cachedToken.token;
   const creds = getEbayCreds();
@@ -220,5 +224,51 @@ export async function acceptedConditionIds(categoryId: string): Promise<Set<numb
     return new Set(conditions.map((c) => c.id));
   } catch {
     return new Set();
+  }
+}
+
+export interface ActiveListing {
+  title: string;
+  price: string;
+  condition: string;
+  itemWebUrl: string;
+}
+
+// Live replacement for the dead Finding API's findCompletedItems. The Browse
+// API only searches ACTIVE listings (no sold/completed history without the
+// restricted Marketplace Insights API), so this is deliberately framed as
+// "current competing listings," not "sold comps" — callers should be honest
+// about that distinction rather than implying sold-price data that isn't
+// actually there.
+export async function searchActiveListings(
+  keywords: string,
+  limit = 12
+): Promise<ActiveListing[]> {
+  const q = (keywords || "").trim();
+  if (!q) return [];
+  try {
+    const token = await appToken();
+    const url = new URL(`${EBAY_BUY_BASE}/item_summary/search`);
+    url.searchParams.set("q", q.slice(0, 350));
+    url.searchParams.set("limit", String(Math.min(Math.max(limit, 1), 50)));
+    url.searchParams.set("sort", "price");
+    const resp = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-EBAY-C-MARKETPLACE-ID": EBAY_MARKETPLACE_ID,
+        Accept: "application/json",
+      },
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json().catch(() => null);
+    const items: any[] = data?.itemSummaries ?? [];
+    return items.map((it) => ({
+      title: String(it?.title ?? ""),
+      price: it?.price?.value ? `$${it.price.value}` : "",
+      condition: String(it?.condition ?? ""),
+      itemWebUrl: String(it?.itemWebUrl ?? ""),
+    }));
+  } catch {
+    return [];
   }
 }

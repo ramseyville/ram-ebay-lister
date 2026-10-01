@@ -209,6 +209,16 @@ export async function POST(req: NextRequest) {
         const resp = await client.messages.create({
           model: ANALYSIS_MODEL,
           max_tokens: 8000,
+          // Real web search, finally wired up — the "when web_search is
+          // enabled" comment on lastText() below was written anticipating
+          // this, but the actual `tools` entry was never added, so every
+          // listing this app has ever produced was generated from photos
+          // alone: no real product-line match, no verified MSRP, no look at
+          // what keywords other live eBay listings for the same item use.
+          // Bounded to a handful of uses per item to keep cost and latency
+          // in check — this isn't meant to research exhaustively, just to
+          // verify the specific, nameable product the photos show.
+          tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
           // System prompt is large and identical across requests for the same
           // profile — cache it to cut cost and latency.
           system: [
@@ -239,6 +249,7 @@ export async function POST(req: NextRequest) {
           finalResp = await client.messages.create({
             model: ANALYSIS_MODEL,
             max_tokens: 8000,
+            tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
             system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
             messages: [{
               role: "user",

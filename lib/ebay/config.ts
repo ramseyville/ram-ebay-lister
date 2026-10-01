@@ -20,6 +20,17 @@ export const EBAY_TRADING = "https://api.ebay.com/ws/api.dll";
 // 2026 — replaced by the Media API's createImageFromFile/getImage. Same
 // OAuth scope (sell.inventory) already covers this, so no reconnect needed.
 export const EBAY_MEDIA_BASE = "https://apim.ebay.com/commerce/media/v1_beta";
+// eBay's legacy Finding API (findCompletedItems, used for "sold comps") hit
+// end-of-life in February 2025 — confirmed via eBay's own developer forum
+// (https://community.ebay.com/t5/RESTful-Buy-APIs-Browse/Finding-API-EOL-in-February-2025).
+// It has been silently returning no usable data ever since, which is the
+// real cause behind every "Comp lookup failed — no data returned" pricing
+// result this app has produced. The Browse API is the live replacement for
+// active-listing search (same app-level client-credentials token as the
+// Taxonomy API above); there is no direct public replacement for historical
+// SOLD data — that requires the restricted Marketplace Insights API, which
+// most developer accounts (including this one) aren't approved for.
+export const EBAY_BUY_BASE = "https://api.ebay.com/buy/browse/v1";
 export const EBAY_MARKETPLACE_ID = "EBAY_US";
 export const EBAY_CATEGORY_TREE_ID = "0";
 
