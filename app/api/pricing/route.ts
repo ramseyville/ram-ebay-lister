@@ -135,7 +135,11 @@ INSTRUCTIONS:
 - Study all photos: front shot shows overall condition; tag/label/hang tag photos show exact brand, size, material, and MSRP
 - The MSRP from the hang tag (if visible) is a key pricing anchor — note it prominently
 - The listings above are CURRENT ACTIVE asking prices, not sold data — eBay's sold-comp API isn't available to this account. Use them as a ceiling/positioning signal, not a guarantee of what the item will actually sell for, and say so plainly rather than calling them "comps" or implying they're sold prices.
-- You have a real web_search tool. Use it — don't skip this — when the photos show enough distinguishing detail (brand + product line name, a style/fabric name on the tag, a distinctive construction detail) to identify the EXACT retail product: search for it, confirm the real current or original MSRP from the brand's own site or a reputable retailer, and note 2-3 specific keywords or phrasing that other real, currently-listed eBay sellers use for this same or a very similar item (search site:ebay.com plus the brand/product line). Cite what you actually found; never state a fact you didn't verify as if you looked it up.
+- You have a real web_search tool (up to 3 uses) — don't skip this, and don't burn all 3 on one vague search. Spend them deliberately, in this order of priority:
+  1. If a style number, product-line name, or distinctive construction detail (e.g. "snap-front varsity," a named fabric/mill) is visible or identifiable from the photos, search for the brand + that specific detail FIRST — confirming the exact product is worth more than a generic brand search, because it's what makes the MSRP and comps trustworthy rather than a category guess.
+  2. Once you've confirmed the exact product (or if you can't), search for its real current/original MSRP from the brand's own site or a reputable retailer.
+  3. If you have a search left, search site:ebay.com plus the brand/product line to see what real, currently-listed sellers use as keywords/phrasing for this same or a closely matching item — especially useful when the active-listing data above has no close match to this item's specific construction/style.
+  Cite what you actually found; never state a fact you didn't verify as if you looked it up. If a search comes up empty, say so and move to the next priority rather than retrying the same query.
 - Only compare same condition: pre-owned to pre-owned, NWT to NWT
 - Flag extended size scarcity premium (XL+, waist 38+) if applicable
 - If both the active-listing data and web search come up thin, say so explicitly — don't paper over a real data gap with a confident-sounding guess
@@ -156,12 +160,14 @@ OUTPUT:
     response = await client.messages.create({
       model: "claude-sonnet-5",
       max_tokens: 1536,
-      // Capped at 2 (was 3) for the initial rollout — same reasoning as
-      // analyze/route.ts's searchTools(): bound the worst-case added
-      // latency until the speed trade-off is confirmed acceptable.
+      // Raised back to 3 here (analyze/route.ts stays at 2): pricing
+      // accuracy depends directly on verifying the exact product/MSRP, and
+      // the prompt above now gives the model explicit priority order so
+      // the 3 searches are spent deliberately rather than wasted on a
+      // vague first attempt. Worth the extra latency on this route.
       tools: webSearchUnavailable
         ? undefined
-        : [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
+        : [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
       messages: [{ role: "user", content: [...imageBlocks, textBlock] }],
     });
   } catch (err) {
