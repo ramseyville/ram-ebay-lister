@@ -790,7 +790,9 @@ function reconcileAspects(
         sizeCandidateMatch ||
         sizeTypeCandidateMatch ||
         (a.name !== "Size" && a.name !== "Size Type" ? matchAllowed(current || "", a.values) : "") ||
-        (useDefault && a.name !== "Size" && a.name !== "Size Type" ? matchAllowed(defaultValue, a.values) : "") ||
+        // Defaults are a last resort for fields eBay REQUIRES — never a guess
+        // filled into an optional field the listing says nothing about.
+        (useDefault && mustFill && a.name !== "Size" && a.name !== "Size Type" ? matchAllowed(defaultValue, a.values) : "") ||
         (a.name === "Department" ? pickDepartment(a.values, listing, catKey) : "") ||
         (mustFill ? a.values[0] : "") ||
         // If eBay's metadata lists zero valid values for a field it still
@@ -804,6 +806,16 @@ function reconcileAspects(
       } else if (!mustFill && current) {
         delete aspects[a.name];
       }
+    } else if (current && a.values.length) {
+      // Free-text field with eBay's own suggested values: use eBay's exact
+      // spelling when the listing's value is one of them (case/plural only —
+      // no fuzzy or numeric snapping, which could change a real measurement).
+      const ls = current.trim().toLowerCase();
+      const exact = a.values.find((v) => {
+        const lv = v.toLowerCase();
+        return lv === ls || lv === `${ls}s` || `${lv}s` === ls;
+      });
+      if (exact) aspects[a.name] = [exact];
     } else if (mustFill && !current) {
       const useDefault = !gate || gate.has(catKey);
       const defaultValue =
@@ -817,6 +829,23 @@ function reconcileAspects(
       if (clipped) aspects[a.name] = [clipped];
     }
   }
+
+  // A single clothing item is always sold as one unit.
+  if (APPAREL_CATEGORIES.has(catKey)) {
+    for (const a of meta) {
+      if (a.name === "Unit Type") aspects[a.name] = [matchAllowed("Unit", a.values) || "Unit"];
+      if (a.name === "Unit Quantity") aspects[a.name] = [matchAllowed("1", a.values) || "1"];
+    }
+  }
+
+  // Only eBay's own fields for this category. Anything else is a detail name
+  // the model made up ("Fit Type", "Texture", "Chest Measurement"…) — eBay
+  // shows those as odd custom rows instead of its dropdown fields, so drop
+  // them rather than send values the buyer can't filter on.
+  const known = new Set(meta.map((a) => a.name));
+  const dropped = Object.keys(aspects).filter((k) => !known.has(k));
+  for (const k of dropped) delete aspects[k];
+  if (dropped.length) console.error(`[publish] dropped non-eBay item specifics: ${dropped.join(", ")}`);
 }
 
 // ── eBay error parsing (from the script) ─────────────────────────────────────
