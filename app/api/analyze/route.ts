@@ -9,7 +9,7 @@ import {
 } from "@/lib/prompts";
 import { toImageBlock, type ImageBlock } from "@/lib/images";
 import type { AnalyzeRequestBody, ListingResult } from "@/lib/types";
-import { normalizeDescription } from "@/lib/description";
+import { cleanSpecificValue, normalizeDescription } from "@/lib/description";
 import { cleanTitle, titleLengthOk } from "@/lib/title";
 
 // Analysis can take 30-90s with the expanded prompt + web searches. Pro plan supports 300s.
@@ -297,6 +297,12 @@ export async function POST(req: NextRequest) {
         const listing = parseModelJson<ListingResult>(rawText);
         listing.item_profile = profile;
         listing.description = normalizeDescription(listing.description || "");
+        const specifics = listing.item_specifics;
+        if (specifics) {
+          for (const [k, v] of Object.entries(specifics)) {
+            if (typeof v === "string") specifics[k] = cleanSpecificValue(v);
+          }
+        }
         await repairTitleLength(client, listing);
         // Deterministic backstop: the prompt instructs "Navy Blue" over
         // bare "Navy" (Blue gets meaningfully more search volume alone),
