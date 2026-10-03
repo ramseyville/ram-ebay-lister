@@ -28,6 +28,8 @@ import {
   normalizeConditionGrade,
 } from "@/lib/conditions";
 import type { ListingResult } from "@/lib/types";
+import { fitDescription, normalizeDescription } from "@/lib/description";
+import { cleanTitle } from "@/lib/title";
 import { estimateShipping } from "@/lib/shipping";
 import {
   APPAREL_CATEGORIES,
@@ -2041,12 +2043,8 @@ export async function publishListing(
     ebayTitle = ebayTitle.replace(pattern, "").replace(/\s{2,}/g, " ").trim();
   }
 
-  // Strip any retail price under $90 from the title — low prices waste keyword
-  // space and signal low value. Only $90+ retail prices are worth the characters.
-  ebayTitle = ebayTitle.replace(/\s*\$(\d+(?:\.\d{2})?)\s*(?:retail|msrp|NWT)?/gi, (match, amount) => {
-    const price = parseFloat(amount);
-    return price >= 90 ? match : "";
-  }).replace(/\s{2,}/g, " ").trim().slice(0, 80);
+  // No punctuation or symbols in titles; a retail price reads "MSRP 145".
+  ebayTitle = cleanTitle(ebayTitle).slice(0, 80).trim();
   // A title claiming NWT/New With Tags on an item listed under any other
   // condition misstates it — drop the claim (padding below refills length).
   if (!listedAsNwt) {
@@ -2149,7 +2147,9 @@ export async function publishListing(
   const inventoryItem: any = {
     product: {
       title: ebayTitle,
-      description: applyConditionToDescription(listing.description || "", firstCondText),
+      description: fitDescription(
+        applyConditionToDescription(normalizeDescription(listing.description || ""), firstCondText)
+      ),
       aspects,
       imageUrls: photoUrls.slice(0, 12),
     },
@@ -2165,7 +2165,7 @@ export async function publishListing(
     const text = conditionTextFor(id);
     item.condition = en;
     item.conditionDescription = text;
-    item.product.description = applyConditionToDescription(item.product.description, text);
+    item.product.description = fitDescription(applyConditionToDescription(item.product.description, text));
   };
 
   const putInventory = () =>
@@ -2227,7 +2227,9 @@ export async function publishListing(
     sku,
     marketplaceId: EBAY_MARKETPLACE_ID,
     format: "FIXED_PRICE",
-    listingDescription: listing.description || "",
+    // Same text as the inventory item: eBay shows the offer's copy to buyers,
+    // so it must carry the rebuilt condition paragraph and sign-off too.
+    listingDescription: inventoryItem.product.description,
     pricingSummary: { price: { value: String(price), currency: "USD" } },
     quantityLimitPerBuyer: 1,
     categoryId: catId,
