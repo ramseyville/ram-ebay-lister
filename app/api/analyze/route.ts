@@ -26,6 +26,14 @@ export const maxDuration = 300;
 // - REPAIR_MODEL: text-only follow-up (fixing a too-short/long title). No
 //   photos involved, small output — Haiku handles this fine.
 const ANALYSIS_MODEL = "claude-sonnet-5";
+// Room for the model's reasoning and web-search notes plus the full listing
+// JSON. At 8000 the reply was being cut off mid-JSON on detailed items once
+// web search was turned on.
+const ANALYSIS_MAX_TOKENS = 16000;
+// Finish (or give up cleanly) before Vercel's 300s maxDuration.
+const ANALYZE_DEADLINE_MS = 270_000;
+// Don't start another listing call unless this much time is left.
+const MIN_CALL_MS = 90_000;
 const ROUTER_MODEL = "claude-haiku-4-5-20251001";
 const REPAIR_MODEL = "claude-haiku-4-5-20251001";
 const MAX_IMAGES = 5; // front, back, tag, detail, one more — sufficient for a complete listing
@@ -235,13 +243,28 @@ export async function POST(req: NextRequest) {
     const profile = await routeProfile(client, imageBlocks, body.profile);
     const systemPrompt = buildProfiledAnalysisPrompt(profile);
 
+    // Vercel kills this function at maxDuration (300s). With web search on,
+    // one listing call can take 60-90s, so a few retries used to run past the
+    // limit and die with FUNCTION_INVOCATION_TIMEOUT. Budget the calls so we
+    // stop retrying — and return a clear error — before Vercel cuts us off.
+    const startedAt = Date.now();
+    const remaining = () => ANALYZE_DEADLINE_MS - (Date.now() - startedAt);
+    // Per-call timeout leaves room for title repair; no SDK-level retries,
+    // since a retried timeout would blow straight through the deadline.
+    const callOptions = () => ({ timeout: Math.max(remaining() - 20_000, 30_000), maxRetries: 0 });
+
     // Retry up to 3 times, mirroring the Python analyze_photos() loop.
     let lastErr: unknown = null;
+    let outOfTime = false;
     for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0 && remaining() < MIN_CALL_MS) {
+        outOfTime = true;
+        break;
+      }
       try {
         const resp = await client.messages.create({
           model: ANALYSIS_MODEL,
-          max_tokens: 8000,
+          max_tokens: ANALYSIS_MAX_TOKENS,
           // Real web search, finally wired up — the "when web_search is
           // enabled" comment on lastText() below was written anticipating
           // this, but the actual `tools` entry was never added, so every
@@ -273,15 +296,15 @@ export async function POST(req: NextRequest) {
               ],
             },
           ],
-        });
+        }, callOptions());
         // If the model hit the token limit, retry with 3 photos instead of 5
         // to reduce input size and give the output more room to complete.
         let finalResp = resp;
-        if (resp.stop_reason === "max_tokens" && imageBlocks.length > 3) {
+        if (resp.stop_reason === "max_tokens" && imageBlocks.length > 3 && remaining() > MIN_CALL_MS) {
           console.error("[analyze] max_tokens hit — retrying with 3 photos");
           finalResp = await client.messages.create({
             model: ANALYSIS_MODEL,
-            max_tokens: 8000,
+            max_tokens: ANALYSIS_MAX_TOKENS,
             tools: searchTools(),
             system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
             messages: [{
@@ -291,7 +314,7 @@ export async function POST(req: NextRequest) {
                 { type: "text", text: userText },
               ],
             }],
-          });
+          }, callOptions());
         }
         const rawText = lastText(finalResp);
         const listing = parseModelJson<ListingResult>(rawText);
@@ -339,6 +362,13 @@ export async function POST(req: NextRequest) {
           await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
         }
       }
+    }
+    if (outOfTime) {
+      console.error("[analyze] stopped retrying: not enough time left before the function limit");
+      throw new Error(
+        "Writing this listing took too long (the AI's reply kept coming back incomplete). " +
+          "Please try again — if it keeps happening, try with fewer photos."
+      );
     }
     throw lastErr;
   } catch (e) {
