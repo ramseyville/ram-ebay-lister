@@ -7,12 +7,24 @@
 
 import { CONDITION_PARAGRAPH } from "@/lib/conditions";
 
-// The store sign-off, word for word from the Courthouse Square Deals listing
-// protocol. Hard-coded so the model can't reword it or add stats (feedback %,
-// sales count) that go stale.
+// The store sign-off, from the Courthouse Square Deals listing protocol
+// ("men's" dropped so it reads right on women's items too). Hard-coded so
+// the model can't reword it or add stats (feedback %, sales count) that go
+// stale.
 export const STORE_SIGN_OFF =
-  "Find more quality men’s clothing, outdoor gear, and collectibles at Courthouse Square Deals on eBay. Ships fast from Texas.";
+  "Find more quality clothing, outdoor gear, and collectibles at Courthouse Square Deals on eBay. Ships fast from Texas.";
 const SIGN_OFF_HTML = `<p><em>${STORE_SIGN_OFF}</em></p>`;
+
+/**
+ * Clean one item-specific value: eBay's fields want the value alone
+ * ("27 in"), not hedges like "approx. 27 in" or "~27 in".
+ */
+export function cleanSpecificValue(value: string): string {
+  return (value || "")
+    .replace(/\(?\bapprox(?:imately)?\b\.?\)?:?|~/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 // eBay's Inventory API rejects product.description over 4000 characters
 // (errorId 25718).

@@ -134,6 +134,16 @@ describe("condition wording follows the chosen grade", () => {
     );
   });
 
+  it("doesn't repeat the condition name when the notes start with it", () => {
+    expect(
+      buildConditionText(
+        "New with tags",
+        "New with original tags attached. Never worn.",
+        "New with tags; original hang tag attached at waistband. No stains."
+      )
+    ).toBe("New with tags. New with original tags attached. Never worn. Original hang tag attached at waistband. No stains.");
+  });
+
   it("drops new-with-tags claims from notes on a pre-owned grade", () => {
     expect(dropConflictingClaims("NWT, never worn. Small pull on the left cuff.", false)).toBe(
       "Small pull on the left cuff."

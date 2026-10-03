@@ -252,19 +252,26 @@ export function gradeDisplay(value: string | undefined): { grade: ConditionGrade
 const ALL_NAMES = [...new Set(Object.values(CONDITION_NAMES).flatMap((n) => [n.apparel, n.general]))];
 const ALL_STANDARDS = [...new Set(Object.values(CONDITION_STANDARDS).flatMap((n) => [n.apparel, n.general]))];
 
+// Longest first, so "New with tags" wins over a bare "New".
+const PREFIX_NAMES = [...ALL_NAMES].sort((a, b) => b.length - a.length);
+
 /**
- * Remove a leading "<condition name>. <standard>" that buildConditionText()
- * added earlier — a listing rebuilt from eBay (SKU rename) carries it back in
- * as its notes, and it must not be doubled on the way out.
+ * Remove a leading "<condition name>. <standard>" — added earlier by
+ * buildConditionText() (a listing rebuilt from eBay carries it back in as its
+ * notes), or written by the model itself ("New with tags; original hang
+ * tag…") — so it isn't doubled on the way out.
  */
 export function stripConditionPrefix(text: string): string {
   let out = text.trim();
-  const name = ALL_NAMES.find((n) => out.startsWith(`${n}.`));
+  const lower = out.toLowerCase();
+  const name = PREFIX_NAMES.find(
+    (n) => lower.startsWith(n.toLowerCase()) && /^\s*[.;:,–—-]/.test(out.slice(n.length))
+  );
   if (!name) return out;
-  out = out.slice(name.length + 1).trim();
+  out = out.slice(name.length).replace(/^\s*[.;:,–—-]\s*/, "").trim();
   const standard = ALL_STANDARDS.find((st) => out.startsWith(st));
   if (standard) out = out.slice(standard.length).trim();
-  return out;
+  return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
 function escapeHtml(s: string): string {

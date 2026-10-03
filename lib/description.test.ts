@@ -4,7 +4,7 @@
 // 4000-character eBay limit.
 
 import { describe, it, expect } from "vitest";
-import { STORE_SIGN_OFF, fitDescription, normalizeDescription } from "@/lib/description";
+import { STORE_SIGN_OFF, cleanSpecificValue, fitDescription, normalizeDescription } from "@/lib/description";
 
 const SIGN_OFF = `<p><em>${STORE_SIGN_OFF}</em></p>`;
 
@@ -53,5 +53,15 @@ describe("fitDescription", () => {
     const out = fitDescription(`Opening.${cond}<p><em>${"t".repeat(5000)}</em></p>`);
     expect(out.length).toBeLessThanOrEqual(4000);
     expect(out.endsWith(">")).toBe(true);
+  });
+});
+
+describe("cleanSpecificValue", () => {
+  it("strips approx. hedges from item specific values", () => {
+    expect(cleanSpecificValue("approx. 27 in")).toBe("27 in");
+    expect(cleanSpecificValue("11 in (approx.)")).toBe("11 in");
+    expect(cleanSpecificValue("~44 in")).toBe("44 in");
+    expect(cleanSpecificValue("Approximately 30")).toBe("30");
+    expect(cleanSpecificValue("Wide Leg")).toBe("Wide Leg");
   });
 });
