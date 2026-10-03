@@ -277,15 +277,61 @@ function escapeHtml(s: string): string {
  * amounts are stripped — eBay rejects pricing language in this field.
  */
 export function buildConditionText(label: string, standard: string, notes: string | undefined): string {
-  const cleanNotes = stripConditionPrefix(
-    (notes || "").replace(/\$\d[\d,]*(\.\d{2})?/g, "").replace(/\s{2,}/g, " ").trim()
+  const cleanNotes = dropConflictingClaims(
+    stripConditionPrefix(
+      (notes || "").replace(/\$\d[\d,]*(\.\d{2})?/g, "").replace(/\s{2,}/g, " ").trim()
+    ),
+    isNewLabel(label)
   );
   return [`${label}.`, standard, cleanNotes].filter(Boolean).join(" ").slice(0, 1000);
 }
 
+// eBay's "New…" condition names (New, New with tags, New other (see
+// details), New with defects…) vs. every pre-owned/used name.
+function isNewLabel(label: string): boolean {
+  return /^New\b/i.test(label.trim());
+}
+
+// Wording that claims the other side of the new/pre-owned line than the
+// condition actually chosen — e.g. notes written for "Pre-owned - Excellent"
+// left in place after the seller switches the item to "New without tags".
+const USED_CLAIM =
+  /\bpre-?owned\b|\bpreviously (?:owned|worn|used)\b|\b(?:gently|lightly) (?:worn|used)\b|\bworn (?:once|twice|a few times|\d)/i;
+const NEW_CLAIM =
+  /\bNWT\b|\bnew with(?:out)? tags\b|\bbrand[- ]new\b|\bnever (?:been )?worn\b|\bunworn\b|\btags (?:still )?attached\b/i;
+
+/** Remove sentences whose condition claim contradicts the chosen grade. */
+export function dropConflictingClaims(text: string, isNew: boolean): string {
+  const conflict = isNew ? USED_CLAIM : NEW_CLAIM;
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !conflict.test(sentence))
+    .join(" ")
+    .trim();
+}
+
+// The apparel condition names (plus NWT) as they appear in AI-written prose,
+// tolerant of "Pre-owned Excellent" / "Pre-Owned – Excellent" spellings.
+const CONDITION_MENTION =
+  /\bNWT\b|\bNew with(?:out)? tags\b|\bNew with imperfections\b|\bPre-?owned\s*[-–—]?\s*(?:Excellent|Good|Fair)\b/gi;
+
+/**
+ * Rewrite every named condition in the description prose to the one actually
+ * chosen, so the opening line can't say "Pre-owned Excellent" on an item
+ * listed as "New without tags".
+ */
+function syncConditionMentions(html: string, label: string): string {
+  return html.replace(CONDITION_MENTION, (m) => (m.toLowerCase() === label.toLowerCase() ? m : label));
+}
+
+// Longest first, so "New with tags" wins over a bare "New".
+const NAMES_BY_LENGTH = [...new Set(Object.values(CONDITION_NAMES).flatMap((n) => [n.apparel, n.general]))].sort(
+  (a, b) => b.length - a.length
+);
+
 // A description paragraph whose text starts with "Condition" (optionally
 // wrapped in <strong>/<em>), e.g. <p><strong>Condition:</strong> ...</p>.
-const CONDITION_PARAGRAPH = /<p>\s*(?:<(?:strong|em|b)>\s*)?Condition\b[\s\S]*?<\/p>/i;
+export const CONDITION_PARAGRAPH = /<p>\s*(?:<(?:strong|em|b)>\s*)?Condition\b[\s\S]*?<\/p>/i;
 
 /**
  * Replace the description's condition paragraph with one built from the
@@ -295,9 +341,11 @@ const CONDITION_PARAGRAPH = /<p>\s*(?:<(?:strong|em|b)>\s*)?Condition\b[\s\S]*?<
  */
 export function applyConditionToDescription(html: string, conditionText: string): string {
   const para = `<p><strong>Condition:</strong> ${escapeHtml(conditionText)}</p>`;
-  const src = html || "";
+  const label = NAMES_BY_LENGTH.find((n) => conditionText.startsWith(`${n}.`));
+  const src = label ? syncConditionMentions(html || "", label) : html || "";
   if (CONDITION_PARAGRAPH.test(src)) return src.replace(CONDITION_PARAGRAPH, para);
   const signOff = src.lastIndexOf("<p><em>");
   if (signOff >= 0) return `${src.slice(0, signOff)}${para}\n${src.slice(signOff)}`;
   return src ? `${src}\n${para}` : para;
 }
+

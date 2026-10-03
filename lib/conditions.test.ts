@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest";
 import {
   applyConditionToDescription,
   buildConditionText,
+  dropConflictingClaims,
   conditionIdCandidates,
   conditionName,
   conditionStandard,
@@ -116,5 +117,43 @@ describe("condition text", () => {
   it("inserts a condition paragraph before the sign-off when missing", () => {
     const out = applyConditionToDescription("<p>Body</p><p><em>Find more</em></p>", "New with tags.");
     expect(out).toBe("<p>Body</p><p><strong>Condition:</strong> New with tags.</p>\n<p><em>Find more</em></p>");
+  });
+});
+
+
+describe("condition wording follows the chosen grade", () => {
+  it("drops pre-owned claims from notes on a New grade", () => {
+    expect(
+      buildConditionText(
+        "New without tags",
+        "New and unworn, without original tags. No flaws.",
+        "Pre-owned with no visible wear. Snaps all work. A faint mark near the left shoulder seam."
+      )
+    ).toBe(
+      "New without tags. New and unworn, without original tags. No flaws. Snaps all work. A faint mark near the left shoulder seam."
+    );
+  });
+
+  it("drops new-with-tags claims from notes on a pre-owned grade", () => {
+    expect(dropConflictingClaims("NWT, never worn. Small pull on the left cuff.", false)).toBe(
+      "Small pull on the left cuff."
+    );
+  });
+
+  it("keeps notes that don't contradict the grade", () => {
+    expect(dropConflictingClaims("Never worn. Tags attached.", true)).toBe("Never worn. Tags attached.");
+  });
+
+  it("rewrites other condition names in the description to the chosen one", () => {
+    const html = "<p>Bonobos Mens Medium Bomber Jacket — Pre-owned Excellent, great layer.</p><p>Body</p>";
+    const out = applyConditionToDescription(html, "New without tags. New and unworn.");
+    expect(out).toContain("Bomber Jacket — New without tags, great layer.");
+    expect(out).toContain("<p><strong>Condition:</strong> New without tags. New and unworn.</p>");
+    expect(out).not.toContain("Pre-owned");
+  });
+
+  it("replaces NWT in prose when the item isn't new with tags", () => {
+    const out = applyConditionToDescription("<p>Polo Shirt Large — NWT, $98 retail.</p>", "Pre-owned - Good. Light wear.");
+    expect(out).toContain("Polo Shirt Large — Pre-owned - Good, $98 retail.");
   });
 });
