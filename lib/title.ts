@@ -1,6 +1,8 @@
-// Deterministic title clean-up. The listing protocol allows only searchable
-// keywords in a title: no punctuation or symbols of any kind ($ % & / - etc.).
-// The prompt says so, but the model still slips them in, so enforce it here.
+// Deterministic title clean-up. Titles carry only searchable keywords: no
+// punctuation or symbols (% & / - etc.), except the $ in the original retail
+// price, written bare as "$145" ("MSRP"/"retail" aren't search keywords and
+// cost characters). The prompt says so, but the model still slips up, so
+// enforce it here.
 //
 // Pure module — no server imports.
 
@@ -13,10 +15,11 @@ export function titleLengthOk(title: string): boolean {
 
 export function cleanTitle(raw: string): string {
   return (raw || "")
-    // A retail price in any of the model's formats becomes "MSRP 145".
-    .replace(/\$\s*(\d[\d,]*)(?:\.\d{2})?\s*(?:retail|msrp)\b/gi, "MSRP $1")
-    .replace(/\b(?:retail|msrp)\s*\$\s*(\d[\d,]*)(?:\.\d{2})?/gi, "MSRP $1")
-    .replace(/\$\s*(\d[\d,]*)(?:\.\d{2})?/g, "MSRP $1")
+    // A retail price in any of the model's formats becomes a bare "$145".
+    .replace(/\$\s*(\d[\d,]*)(?:\.\d{2})?\s*(?:retail|msrp)\b/gi, "$$$1")
+    .replace(/\b(?:retail|msrp)\s*\$?\s*(\d[\d,]*)(?:\.\d{2})?/gi, "$$$1")
+    .replace(/\b(\d[\d,]*)(?:\.\d{2})?\s+(?:retail|msrp)\b/gi, "$$$1")
+    .replace(/\$\s*(\d[\d,]*)\.\d{2}\b/g, "$$$1")
     .replace(/\b(\d+),(\d{3})\b/g, "$1$2")
     // Fabric percentages ("100% Cotton") read as noise once the % is gone.
     .replace(/\b\d{1,3}\s*%\s*/g, "")
@@ -26,7 +29,8 @@ export function cleanTitle(raw: string): string {
     .replace(/\s*&\s*/g, " and ")
     // Apostrophes join rather than split: "Levi's" → "Levis", "Men's" → "Mens".
     .replace(/['’]/g, "")
-    .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+    // Every other symbol goes; a $ survives only directly before a digit.
+    .replace(/(?:(?!\$\d)[^\p{L}\p{N}\s])+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 }

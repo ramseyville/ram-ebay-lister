@@ -4,13 +4,17 @@ import { describe, it, expect } from "vitest";
 import { cleanTitle, titleLengthOk } from "@/lib/title";
 
 describe("cleanTitle", () => {
-  it("writes retail prices as MSRP with no $ sign", () => {
+  it("writes the retail price as a bare $ amount", () => {
     expect(cleanTitle("Tommy Bahama Silk Camp Shirt Mens XL $128 retail")).toBe(
-      "Tommy Bahama Silk Camp Shirt Mens XL MSRP 128"
+      "Tommy Bahama Silk Camp Shirt Mens XL $128"
     );
     expect(cleanTitle("Hugo Boss Jetsetter Suit Mens 40R $1,295 NWT")).toBe(
-      "Hugo Boss Jetsetter Suit Mens 40R MSRP 1295 NWT"
+      "Hugo Boss Jetsetter Suit Mens 40R $1295 NWT"
     );
+    expect(cleanTitle("Peter Millar Polo Shirt Mens L MSRP 98")).toBe("Peter Millar Polo Shirt Mens L $98");
+    expect(cleanTitle("Peter Millar Polo Shirt Mens L MSRP $98.00")).toBe("Peter Millar Polo Shirt Mens L $98");
+    expect(cleanTitle("Faherty Shorts Mens 34 145 retail")).toBe("Faherty Shorts Mens 34 $145");
+    expect(cleanTitle("Rhone Shorts Mens L $88 NWT")).toBe("Rhone Shorts Mens L $88 NWT");
   });
 
   it("removes punctuation and symbols", () => {
