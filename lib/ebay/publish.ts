@@ -2043,7 +2043,7 @@ export async function publishListing(
     ebayTitle = ebayTitle.replace(pattern, "").replace(/\s{2,}/g, " ").trim();
   }
 
-  // No punctuation or symbols in titles; a retail price reads "MSRP 145".
+  // No punctuation or symbols in titles; a retail price reads as a bare "$145".
   ebayTitle = cleanTitle(ebayTitle).slice(0, 80).trim();
   // A title claiming NWT/New With Tags on an item listed under any other
   // condition misstates it — drop the claim (padding below refills length).
