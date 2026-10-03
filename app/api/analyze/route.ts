@@ -9,6 +9,8 @@ import {
 } from "@/lib/prompts";
 import { toImageBlock, type ImageBlock } from "@/lib/images";
 import type { AnalyzeRequestBody, ListingResult } from "@/lib/types";
+import { normalizeDescription } from "@/lib/description";
+import { cleanTitle, titleLengthOk } from "@/lib/title";
 
 // Analysis can take 30-90s with the expanded prompt + web searches. Pro plan supports 300s.
 export const maxDuration = 300;
@@ -117,7 +119,8 @@ async function repairTitleLength(
   listing: ListingResult
 ): Promise<void> {
   const originalTitle = listing.title ?? "";
-  if (originalTitle.length >= 77 && originalTitle.length <= 80) return;
+  listing.title = cleanTitle(originalTitle);
+  if (titleLengthOk(listing.title)) return;
 
   console.error(
     `[analyze] title out of range from initial generation: ${originalTitle.length} chars — "${originalTitle}"`
@@ -126,7 +129,7 @@ async function repairTitleLength(
   const MAX_ATTEMPTS = 3;
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
     const current = listing.title ?? "";
-    if (current.length >= 77 && current.length <= 80) return;
+    if (titleLengthOk(current)) return;
 
     const direction =
       current.length < 77
@@ -143,7 +146,7 @@ async function repairTitleLength(
             content: [
               {
                 type: "text",
-                text: `This eBay listing title is exactly ${current.length} characters, counted with a monospace ruler. It MUST be 77-80 characters — this is non-negotiable protocol, not a guideline.\n\nCurrent title: "${current}"\n\n${direction}\n\nDo not change the brand, item type, or condition claims. Count every character of your revised title (including spaces) before answering — write out the count mentally first. Respond with ONLY this JSON, nothing else, no explanation: {"title": "..."}`,
+                text: `This eBay listing title is exactly ${current.length} characters, counted with a monospace ruler. It MUST be 77-80 characters — this is non-negotiable protocol, not a guideline.\n\nCurrent title: "${current}"\n\n${direction}\n\nDo not change the brand, item type, or condition claims. Keep the order Brand, Model/Product Line, Item Type, then descriptors. No punctuation or symbols of any kind ($ % & / - ' etc.) — write a retail price as "MSRP 145". Count every character of your revised title (including spaces) before answering — write out the count mentally first. Respond with ONLY this JSON, nothing else, no explanation: {"title": "..."}`,
               },
             ],
           },
@@ -152,7 +155,7 @@ async function repairTitleLength(
       const text = firstText(resp);
       const fixed = parseModelJson<{ title?: string }>(text);
       if (fixed?.title) {
-        listing.title = fixed.title;
+        listing.title = cleanTitle(fixed.title);
         console.error(
           `[analyze] title repair attempt ${i + 1}: ${fixed.title.length} chars — "${fixed.title}"`
         );
@@ -166,7 +169,7 @@ async function repairTitleLength(
   }
 
   const finalLen = (listing.title ?? "").length;
-  if (finalLen < 77 || finalLen > 80) {
+  if (!titleLengthOk(listing.title ?? "")) {
     console.error(
       `[analyze] title still out of range after ${MAX_ATTEMPTS} repair attempts: ${finalLen} chars — "${listing.title}" (original was "${originalTitle}")`
     );
@@ -293,6 +296,7 @@ export async function POST(req: NextRequest) {
         const rawText = lastText(finalResp);
         const listing = parseModelJson<ListingResult>(rawText);
         listing.item_profile = profile;
+        listing.description = normalizeDescription(listing.description || "");
         await repairTitleLength(client, listing);
         // Deterministic backstop: the prompt instructs "Navy Blue" over
         // bare "Navy" (Blue gets meaningfully more search volume alone),
