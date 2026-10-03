@@ -146,7 +146,7 @@ async function repairTitleLength(
             content: [
               {
                 type: "text",
-                text: `This eBay listing title is exactly ${current.length} characters, counted with a monospace ruler. It MUST be 77-80 characters — this is non-negotiable protocol, not a guideline.\n\nCurrent title: "${current}"\n\n${direction}\n\nDo not change the brand, item type, or condition claims. Keep the order Brand, Model/Product Line, Item Type, then descriptors. No punctuation or symbols of any kind ($ % & / - ' etc.) — write a retail price as "MSRP 145". Count every character of your revised title (including spaces) before answering — write out the count mentally first. Respond with ONLY this JSON, nothing else, no explanation: {"title": "..."}`,
+                text: `This eBay listing title is exactly ${current.length} characters, counted with a monospace ruler. It MUST be 77-80 characters — this is non-negotiable protocol, not a guideline.\n\nCurrent title: "${current}"\n\n${direction}\n\nDo not change the brand, item type, or condition claims. Keep the order Brand, Model/Product Line, Item Type, then descriptors. No punctuation or symbols (% & / - ' etc.) — write a retail price as a bare "$145", never with "MSRP" or "retail". Count every character of your revised title (including spaces) before answering — write out the count mentally first. Respond with ONLY this JSON, nothing else, no explanation: {"title": "..."}`,
               },
             ],
           },
