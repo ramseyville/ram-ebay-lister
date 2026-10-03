@@ -28,7 +28,7 @@ import {
   normalizeConditionGrade,
 } from "@/lib/conditions";
 import type { ListingResult } from "@/lib/types";
-import { fitDescription, normalizeDescription } from "@/lib/description";
+import { cleanSpecificValue, fitDescription, normalizeDescription } from "@/lib/description";
 import { cleanTitle } from "@/lib/title";
 import { estimateShipping } from "@/lib/shipping";
 import {
@@ -420,7 +420,7 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
   for (const [rawKey, v] of Object.entries(listing.item_specifics || {})) {
     if (!rawKey || rawKey.startsWith("---")) continue;
     const k = ASPECT_NAME_ALIASES[rawKey] || rawKey;
-    const val = clipAspectValue(singleValue(v));
+    const val = clipAspectValue(cleanSpecificValue(singleValue(v)));
     if (val && !aspects[k]) aspects[k] = [val];
   }
 
