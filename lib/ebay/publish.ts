@@ -58,9 +58,12 @@ const CATEGORY_MAP: Record<string, string> = {
   // which is actually Women's Jeans (confirmed separately, correct for
   // womens_jeans below) — meaning every women's skirt would have been
   // filed as jeans. Found during the post-session category audit.
-  womens_top: "15724", womens_dress: "63861", womens_skirt: "63864",
-  // Confirmed via live eBay listing URLs - a distinct category from
-  // generic Tops/Dress Shirts, with its own Size Type taxonomy.
+  // Women's Tops (53159, "/b/Womens-Tops/53159/" on eBay) — the leaf that
+  // women's shirts, blouses and polos are listed in. This was previously
+  // "15724", which is the top-level Women's Clothing node, not a leaf: eBay
+  // returns no item aspects for it, so the size check before publishing
+  // failed every time and no women's top could be posted.
+  womens_top: "53159", womens_dress: "63861", womens_skirt: "63864",
   womens_polo: "53159",
   // Confirmed via multiple live eBay Women's Pants listing URLs (all
   // showing "/Womens-Pants/63863/..." and "/Casual-Pants-for-Women/63863/
