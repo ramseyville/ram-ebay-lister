@@ -1293,3 +1293,18 @@ textarea {
   border-radius: 6px;
   background: #fff;
 }
+
+.doc-apply {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.08);
+}
+.doc-apply select {
+  font: inherit;
+  margin-left: 4px;
+}
