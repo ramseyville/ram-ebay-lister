@@ -10,7 +10,7 @@ import {
 import { toImageBlock, type ImageBlock } from "@/lib/images";
 import type { AnalyzeRequestBody, ListingResult } from "@/lib/types";
 import { cleanSpecificValue, normalizeDescription } from "@/lib/description";
-import { cleanTitle, dropLowRetailPrice, hasPlainColor, plainColorFrom, titleLengthOk } from "@/lib/title";
+import { cleanTitle, dropLowRetailPrice, hasPlainColor, needsShirtWord, plainColorFrom, titleLengthOk } from "@/lib/title";
 
 // Analysis can take 30-90s with the expanded prompt + web searches. Pro plan supports 300s.
 export const maxDuration = 300;
@@ -134,7 +134,8 @@ async function repairTitleLength(
   // Seas" alone is not). Only enforced when the listing's color field gives
   // us a plain color to ask for.
   const plainColor = plainColorFrom(listing.color);
-  const titleOk = (t: string) => titleLengthOk(t) && (!plainColor || hasPlainColor(t));
+  const titleOk = (t: string) =>
+    titleLengthOk(t) && (!plainColor || hasPlainColor(t)) && !needsShirtWord(listing.item_type, t);
   if (titleOk(listing.title)) return;
 
   console.error(
@@ -156,7 +157,10 @@ async function repairTitleLength(
         : current.length < 77
         ? `It is TOO SHORT by ${77 - current.length}-${80 - current.length} characters. Add more searchable keywords — do not pad with generic filler like "Casual." Good options to add, in priority order: a size format variant (e.g. "Size Large" instead of "L"), fabric/material name, fit descriptor (Slim, Relaxed, Regular), color detail, era/decade if vintage, or a genuinely specific occasion (Golf, Resort, Travel, Beach) only if it truly fits the item.`
         : `It is TOO LONG by ${current.length - 80} characters. Trim the least essential descriptor — keep brand, item type, color, and size intact.`;
-    const direction = lengthNote + colorNote;
+    const shirtNote = needsShirtWord(listing.item_type, current)
+      ? ` This item is a shirt, so the title must include the word "Shirt".`
+      : "";
+    const direction = lengthNote + colorNote + shirtNote;
 
     try {
       const resp = await client.messages.create({
