@@ -22,7 +22,7 @@ export const APPAREL_CATEGORIES = new Set([
   "womens_sweater", "womens_jeans", "womens_clothing", "womens_shoes", "mens_top",
   "mens_pants", "mens_coat", "mens_sweater", "mens_jeans", "mens_clothing",
   "mens_shoes", "scarf", "belt", "hat", "mens_polo", "womens_polo",
-  "mens_casual_shirt", "mens_tshirt",
+  "mens_casual_shirt", "mens_tshirt", "mens_hoodie", "womens_hoodie",
 ]);
 
 export const PANTS_CATEGORIES = new Set([
@@ -31,7 +31,7 @@ export const PANTS_CATEGORIES = new Set([
 
 export const TOPS_CATEGORIES = new Set([
   "mens_top", "womens_top", "mens_sweater", "womens_sweater", "mens_clothing", "womens_clothing",
-  "mens_polo", "womens_polo", "mens_casual_shirt", "mens_tshirt",
+  "mens_polo", "womens_polo", "mens_casual_shirt", "mens_tshirt", "mens_hoodie", "womens_hoodie",
 ]);
 
 export const SIZE_ENFORCED_CATEGORIES = new Set([
@@ -40,7 +40,7 @@ export const SIZE_ENFORCED_CATEGORIES = new Set([
   "womens_top", "womens_pants", "womens_jacket", "womens_coat",
   "womens_sweater", "womens_jeans", "womens_dress", "womens_skirt",
   "womens_shoes", "womens_clothing", "womens_polo",
-  "mens_casual_shirt", "mens_tshirt",
+  "mens_casual_shirt", "mens_tshirt", "mens_hoodie", "womens_hoodie",
 ]);
 
 export function cleanSizeBase(rawSize: string): string {

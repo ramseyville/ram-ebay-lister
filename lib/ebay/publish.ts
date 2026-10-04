@@ -103,6 +103,10 @@ const CATEGORY_MAP: Record<string, string> = {
   // polo shirts that looked like eBay inconsistency but wasn't.
   mens_polo: "185101",
   mens_sweater: "11484", mens_jeans: "11483", mens_clothing: "1059",
+  // Hoodies & Sweatshirts — separate eBay leaves from Sweaters, confirmed
+  // via eBay's own pages ("/b/Mens-Hoodies-Sweatshirts/155183/",
+  // "/b/Womens-Hoodies-Sweatshirts/155226/").
+  mens_hoodie: "155183", womens_hoodie: "155226",
   mens_shoes: "93427", handbag: "169291", wallet: "2996", jewelry: "281",
   scarf: "45238", belt: "2996", sunglasses: "79720", hat: "52382", mens_tie: "15662",
   accessory: "4250", doll: "22733", collectible: "1463", collector_plate: "1467",
@@ -137,6 +141,7 @@ const LEAF_FALLBACKS = ["1463", "22733", "2550", "48108", "316", "171485", "2624
 const OUTERWEAR_CATEGORIES = new Set([
   "mens_coat", "mens_jacket", "womens_coat", "womens_jacket",
 ]);
+const HOODIE_CATEGORIES = new Set(["mens_hoodie", "womens_hoodie"]);
 
 
 // Categories where eBay's Aug/Sept 2026 standardized-size enforcement
@@ -147,7 +152,7 @@ const OUTERWEAR_CATEGORIES = new Set([
 // on jackets, "Leg Style: Straight" on tops, etc.
 // Map of aspect name → set of category keys where the default is appropriate.
 const ASPECT_CATEGORY_GATES: Record<string, Set<string>> = {
-  "Hood":         OUTERWEAR_CATEGORIES,
+  "Hood":         new Set([...OUTERWEAR_CATEGORIES, ...HOODIE_CATEGORIES]),
   "Lining":       OUTERWEAR_CATEGORIES,
   "Rise":         PANTS_CATEGORIES,
   "Leg Style":    PANTS_CATEGORIES,
@@ -155,7 +160,7 @@ const ASPECT_CATEGORY_GATES: Record<string, Set<string>> = {
   "Waist Size":   PANTS_CATEGORIES,
   "Front Type":   PANTS_CATEGORIES,
   "Leg Opening":  PANTS_CATEGORIES,
-  "Closure":      new Set([...PANTS_CATEGORIES, ...OUTERWEAR_CATEGORIES]),
+  "Closure":      new Set([...PANTS_CATEGORIES, ...OUTERWEAR_CATEGORIES, ...HOODIE_CATEGORIES]),
   "Neckline":     TOPS_CATEGORIES,
   "Sleeve Length": TOPS_CATEGORIES,
   "Skirt Length": new Set(["womens_skirt"]),
@@ -1709,6 +1714,25 @@ export async function publishListing(
       catKey = isWomens ? "womens_sweater" : "mens_sweater";
     }
   }
+  // Hoodies and sweatshirts are their own eBay category (Hoodies &
+  // Sweatshirts), not Sweaters — reported directly: the app was filing them
+  // as sweaters. Whatever top-ish category the model picked, a title or item
+  // type that says hoodie/sweatshirt moves it to the right leaf. Jackets and
+  // coats are left alone (a "hooded jacket" is still a jacket).
+  const HOODIE_RECLASSIFY_FROM = new Set([
+    "mens_sweater", "womens_sweater", "mens_top", "womens_top", "mens_clothing",
+    "womens_clothing", "mens_casual_shirt", "mens_tshirt", "hard_goods", "other",
+  ]);
+  if (HOODIE_RECLASSIFY_FROM.has(catKey)) {
+    const hay = `${listing.title || ""} ${listing.item_type || ""}`.toUpperCase();
+    if (/\b(HOODIES?|HOODY|HOODED|SWEATSHIRTS?)\b/.test(hay)) {
+      const isWomens =
+        catKey.startsWith("womens_") ||
+        /\bWOMEN'?S\b/.test(hay) ||
+        /\bWOMEN'?S?\b/.test(String(listing.item_specifics?.Department || "").toUpperCase());
+      catKey = isWomens ? "womens_hoodie" : "mens_hoodie";
+    }
+  }
   // Same catch-all pattern, different item type — confirmed directly on an
   // Ariat "R.E.A.L. Denim" jeans listing (an unusual brand pairing —
   // Ariat is western/equestrian-first, not typically denim-associated —
@@ -2132,7 +2156,7 @@ export async function publishListing(
       const specifics = listing.item_specifics || {};
       const cat = (catKey || "").toLowerCase();
       const isPants  = cat.includes("pant") || cat.includes("jean") || cat.includes("trouser");
-      const isTop    = cat.includes("top") || cat.includes("shirt") || cat.includes("sweater");
+      const isTop    = cat.includes("top") || cat.includes("shirt") || cat.includes("sweater") || cat.includes("hoodie");
       const isJacket = cat.includes("jacket") || cat.includes("coat");
 
       const closureVal = specifics["Closure"] || "";
@@ -2249,7 +2273,7 @@ export async function publishListing(
   const PROMOTED_CATEGORIES = new Set([
     "mens_top", "mens_pants", "mens_shorts", "mens_jacket", "mens_coat",
     "mens_sweater", "mens_jeans", "womens_top", "womens_pants", "womens_jacket",
-    "mens_polo", "womens_polo", "mens_casual_shirt", "mens_tshirt",
+    "mens_polo", "womens_polo", "mens_casual_shirt", "mens_tshirt", "mens_hoodie",
   ]);
   const brandLower = String(listing.brand || "").toLowerCase().trim();
   const isPromoted =
