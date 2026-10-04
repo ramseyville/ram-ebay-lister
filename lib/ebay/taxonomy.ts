@@ -234,6 +234,69 @@ export interface ActiveListing {
   itemWebUrl: string;
 }
 
+export interface CompSearchResult {
+  // eBay's count of ALL active listings matching (not just the sample).
+  total: number;
+  items: ActiveListing[];
+}
+
+/**
+ * One rung of the pricing comp ladder: active listings matching the keywords,
+ * narrowed by eBay's own fields (category, Size, condition IDs) rather than
+ * title words, in best-match order (not cheapest-first, which skewed comps
+ * low). Returns null when eBay can't be reached.
+ */
+export async function searchComps(opts: {
+  keywords: string;
+  categoryId?: string;
+  size?: string;
+  conditionIds?: number[];
+  limit?: number;
+}): Promise<CompSearchResult | null> {
+  const size = (opts.size || "").trim();
+  // Size can only be matched as eBay's Size field within a category;
+  // without one, fall back to searching it as a word.
+  const q = [opts.keywords, opts.categoryId ? "" : size].filter(Boolean).join(" ").trim();
+  if (!q) return null;
+  try {
+    const token = await appToken();
+    const url = new URL(`${EBAY_BUY_BASE}/item_summary/search`);
+    url.searchParams.set("q", q.slice(0, 350));
+    url.searchParams.set("limit", String(Math.min(Math.max(opts.limit ?? 50, 1), 200)));
+    if (opts.categoryId) {
+      url.searchParams.set("category_ids", opts.categoryId);
+      if (size) {
+        const safe = size.replace(/[{}|,]/g, " ").trim();
+        url.searchParams.set("aspect_filter", `categoryId:${opts.categoryId},Size:{${safe}}`);
+      }
+    }
+    if (opts.conditionIds?.length) {
+      url.searchParams.set("filter", `conditionIds:{${opts.conditionIds.join("|")}}`);
+    }
+    const resp = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-EBAY-C-MARKETPLACE-ID": EBAY_MARKETPLACE_ID,
+        Accept: "application/json",
+      },
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json().catch(() => null);
+    const items: any[] = data?.itemSummaries ?? [];
+    return {
+      total: Number(data?.total ?? items.length) || 0,
+      items: items.map((it) => ({
+        title: String(it?.title ?? ""),
+        price: it?.price?.value ? `$${it.price.value}` : "",
+        condition: String(it?.condition ?? ""),
+        itemWebUrl: String(it?.itemWebUrl ?? ""),
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Live replacement for the dead Finding API's findCompletedItems. The Browse
 // API only searches ACTIVE listings (no sold/completed history without the
 // restricted Marketplace Insights API), so this is deliberately framed as

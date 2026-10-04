@@ -285,6 +285,13 @@ async function ebayRequest(
 // Price is taken exactly as entered in the app's price field — no automatic
 // markup. (Previously this added +18%/$5 on every publish, silently
 // overriding whatever price Mark typed before posting.)
+/** eBay leaf category for one of the app's category keys (null if none). */
+export function categoryIdForKey(catKey: string | undefined): string | null {
+  const key = String(catKey || "");
+  if (!key || key === "other" || key === "health_beauty") return null;
+  return CATEGORY_MAP[key] || null;
+}
+
 function resolvePrice(raw: number | string | undefined): number {
   let base = typeof raw === "string" ? parseFloat(raw) : raw ?? 0;
   if (!base || Number.isNaN(base) || base <= 0) base = 29.99;
