@@ -1,7 +1,7 @@
 // lib/title.test.ts
 
 import { describe, it, expect } from "vitest";
-import { cleanTitle, dropLowRetailPrice, hasPlainColor, plainColorFrom, titleLengthOk } from "@/lib/title";
+import { cleanTitle, dropLowRetailPrice, hasPlainColor, needsShirtWord, plainColorFrom, titleLengthOk } from "@/lib/title";
 
 describe("cleanTitle", () => {
   it("writes the retail price as a bare $ amount", () => {
@@ -55,5 +55,13 @@ describe("plain color word", () => {
     expect(plainColorFrom("Dark Seas Navy")).toBe("Navy");
     expect(plainColorFrom(["Heather", "Gray"])).toBe("Gray");
     expect(plainColorFrom("Dark Seas")).toBe(null);
+  });
+});
+
+describe("Shirt rule", () => {
+  it("flags shirts whose title lacks the word Shirt", () => {
+    expect(needsShirtWord("Button Down Shirt", "Polo Ralph Lauren Oxford Button Down Mens Blue L")).toBe(true);
+    expect(needsShirtWord("Polo Shirt", "Peter Millar Crown Sport Polo Shirt Mens Navy Blue L")).toBe(false);
+    expect(needsShirtWord("Wide Leg Pants", "Lauren Ralph Lauren Resort Pants Womens White 20W")).toBe(false);
   });
 });

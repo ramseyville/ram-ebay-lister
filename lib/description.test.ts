@@ -65,3 +65,16 @@ describe("cleanSpecificValue", () => {
     expect(cleanSpecificValue("Wide Leg")).toBe("Wide Leg");
   });
 });
+
+describe("no links or citations", () => {
+  it("strips links, URLs and citation marks but keeps the text", () => {
+    const html =
+      '<p>Crafted from 100% linen [1] per <a href="https://www.ralphlauren.com/x">Ralph Lauren</a> (source: ralphlauren.com). See www.example.com/item 【3†source】 for more.</p>';
+    expect(normalizeDescription(html)).toBe(
+      `<p>Crafted from 100% linen per Ralph Lauren. See for more.</p>\n${SIGN_OFF}`
+    );
+  });
+  it("leaves ordinary parentheses alone", () => {
+    expect(normalizeDescription("<p>Waist: 17 in (per side)</p>")).toBe(`<p>Waist: 17 in (per side)</p>\n${SIGN_OFF}`);
+  });
+});

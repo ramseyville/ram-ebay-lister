@@ -36,16 +36,24 @@ const LEADING_H2 = /^\s*<h2\b[^>]*>[\s\S]*?<\/h2>\s*/i;
 const ITALIC_PARAGRAPH = /<p>\s*<em>[\s\S]*?<\/em>\s*<\/p>\s*/gi;
 // Sentences quoting store stats ("99.8% positive feedback", "11,000+ sales").
 // A "." followed by a digit is a decimal point, not a sentence end.
+// Links and citation marks that web-search answers can leave behind —
+// buyers should never see sources ("[1]", "【3†source】", URLs, <a> tags).
+const ANCHOR_TAG = /<a\b[^>]*>([\s\S]*?)<\/a>/gi;
+const CITATIONS = /\s*(?:\[\d+(?:,\s*\d+)*\]|【[^】]*】|\(sources?:[^)]*\))/gi;
+const URLS = /\s*(?:https?:\/\/|www\.)[^\s<)"]+/gi;
 const STORE_STATS =
   /[^\s.!?<>](?:[^.!?<>]|\.(?=\d))*?(?:positive feedback|\d[\d,]*\+\s*sales)(?:[^.!?<>]|\.(?=\d))*[.!?]?\s*/gi;
 
 /**
- * Normalize a description: no <h2> title at the top (the title is already
- * shown above it on eBay), no store-stat sentences, and exactly one sign-off —
- * ours — at the end.
+ * Normalize a description: no links or citation marks, no <h2> title at the
+ * top (the title is already shown above it on eBay), no store-stat sentences,
+ * and exactly one sign-off — ours — at the end.
  */
 export function normalizeDescription(html: string): string {
   const body = (html || "")
+    .replace(ANCHOR_TAG, "$1")
+    .replace(CITATIONS, "")
+    .replace(URLS, "")
     .replace(LEADING_H2, "")
     .replace(ITALIC_PARAGRAPH, "")
     .replace(STORE_STATS, "")

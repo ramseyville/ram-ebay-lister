@@ -67,3 +67,8 @@ export function plainColorFrom(color: string | string[] | undefined): string | n
   if (!m) return null;
   return m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
 }
+
+/** Mark's rule: any kind of shirt says "Shirt" in its title. */
+export function needsShirtWord(itemType: string | undefined, title: string): boolean {
+  return /shirt/i.test(itemType || "") && !/shirt/i.test(title || "");
+}
