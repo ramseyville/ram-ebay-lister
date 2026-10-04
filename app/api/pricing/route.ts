@@ -147,9 +147,9 @@ INSTRUCTIONS:
 OUTPUT:
 **Comp Summary:** Price range and count from the active listings above (labeled as asking prices, not sold prices), plus anything found via web search
 **MSRP:** From hang tag if visible, else from a verified web search result (name the source), else "not found"
-**Recommended BIN:** $X.XX with brief rationale
-**Best Offer:** Yes/No
-**Auto-accept floor:** $X.XX
+**Recommended BIN:** $X.XX with brief rationale — price endings: new items (NWT, NWOT, new in box, new with imperfections) end in .95; pre-owned items end in .99
+**Best Offer:** Yes (always on; the seller reviews every offer personally — no auto-accept or auto-decline)
+**Suggested accept floor:** $X.XX (guidance for the seller's manual review only)
 **Counter guidance:** What to counter below floor
 **Confidence:** High / Medium / Low
 **Notes:** Scarcity premium, condition flags, or data gaps`,
