@@ -226,20 +226,30 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!Array.isArray(body.images) || body.images.length === 0) {
+  const urlBlocks: ImageBlock[] = (Array.isArray(body.imageUrls) ? body.imageUrls : [])
+    .filter((u) => typeof u === "string" && /^https?:\/\/i\.ebayimg\.com\//.test(u))
+    .slice(0, MAX_IMAGES)
+    .map((u): ImageBlock => ({ type: "image", source: { type: "url", url: u.replace(/^http:/, "https:") } }));
+  if ((!Array.isArray(body.images) || body.images.length === 0) && !urlBlocks.length) {
     return NextResponse.json(
       { ok: false, error: "Please add at least one photo." },
       { status: 400 }
     );
   }
 
-  const imageBlocks = toImageBlocks(body.images);
+  const imageBlocks = [...toImageBlocks(Array.isArray(body.images) ? body.images : []), ...urlBlocks].slice(0, MAX_IMAGES);
   // Seller notes carry what photos can't show (never worn, tags in a drawer,
   // a flaw that didn't photograph). Capped so a paste can't blow up the prompt.
   const sellerNotes = typeof body.notes === "string" ? body.notes.trim().slice(0, 2000) : "";
+  // Listing Doctor rewrite of a live listing: its current details are the
+  // ground truth for anything the photos can't show.
+  const existing = typeof body.existing === "string" ? body.existing.trim().slice(0, 8000) : "";
+  const existingText = existing
+    ? `This is a REWRITE of an existing live eBay listing. Its current details are below. Rules for the rewrite: keep the listing's current condition grade exactly (set "condition" to match it); keep every specific flaw, measurement, and fact the old listing states unless the photos clearly contradict it; never invent anything the old listing, photos, tags, or a search result don't support; the old wording itself is not a model to copy.\n\nCURRENT LISTING:\n${existing}\n\n`
+    : "";
   const userText = sellerNotes
-    ? `Seller notes about this item (use them when grading condition and writing condition_notes; they override what the photos alone suggest):\n${sellerNotes}\n\nAnalyze these photos and return the listing JSON now.`
-    : "Analyze these photos and return the listing JSON now.";
+    ? `${existingText}Seller notes about this item (use them when grading condition and writing condition_notes; they override what the photos alone suggest):\n${sellerNotes}\n\nAnalyze these photos and return the listing JSON now.`
+    : `${existingText}Analyze these photos and return the listing JSON now.`;
   if (imageBlocks.length === 0) {
     return NextResponse.json(
       { ok: false, error: "No readable photos found. Use JPG, PNG, or WebP." },
