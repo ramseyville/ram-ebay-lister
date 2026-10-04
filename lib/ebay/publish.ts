@@ -1942,7 +1942,7 @@ export async function publishListing(
       if (meta.length) {
         // Fill the category's empty fields from the listing, then validate
         // everything (filled or not) against eBay's lists.
-        if (!aspectMeta.length) await fillMissingAspects(aspects, meta, listing);
+        if (!aspectMeta.length) await fillMissingAspects(aspects, meta, listing, photoUrls);
         reconcileAspects(aspects, meta, listing, catKey);
         aspectMeta = meta;
         metaOk = true;
@@ -2579,3 +2579,7 @@ async function publishOfferWithRecovery(
 
 
 
+
+// Shared with the Listing Doctor (lib/ebay/doctor-apply.ts), which edits
+// app-created listings the same way the price/quantity updates above do.
+export { ebayRequest, updateOfferBody, CL as CONTENT_LANGUAGE };

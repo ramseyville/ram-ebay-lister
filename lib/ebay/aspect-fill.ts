@@ -6,7 +6,9 @@
 // Theme, Waist Size… This runs at publish, once the category's aspects are
 // loaded: one small, cheap text-only model call that picks values for the
 // EMPTY fields only, using eBay's exact dropdown wording, and leaves anything
-// the listing doesn't support blank. reconcileAspects() then validates every
+// the listing doesn't support blank. A few of the listing's eBay-hosted photos
+// go along too, so visual fields (Fabric Wash, Pocket Type, Pattern…) can be
+// read the way eBay's own suggestions are. reconcileAspects() then validates every
 // value against eBay's lists as usual, so a bad pick can't reach eBay.
 
 import { getClient, parseModelJson } from "@/lib/anthropic";
@@ -33,7 +35,8 @@ function plainText(html: string): string {
 export async function fillMissingAspects(
   aspects: Record<string, string[]>,
   meta: AspectMeta[],
-  listing: ListingResult
+  listing: ListingResult,
+  photoUrls: string[] = []
 ): Promise<string[]> {
   const empty = meta.filter(
     (a) =>
@@ -78,7 +81,14 @@ export async function fillMissingAspects(
         messages: [
           {
             role: "user",
-            content: `Fill in eBay item specifics for this listing.
+            content: [
+              ...photoUrls
+                .filter((u) => /^https?:\/\/i\.ebayimg\.com\//.test(u))
+                .slice(0, 3)
+                .map((u) => ({ type: "image" as const, source: { type: "url" as const, url: u.replace(/^http:/, "https:") } })),
+              {
+                type: "text" as const,
+                text: `Fill in eBay item specifics for this listing${photoUrls.length ? " (photos of the item are above)" : ""}.
 
 LISTING:
 ${facts}
@@ -87,10 +97,12 @@ EMPTY eBay FIELDS for this category:
 ${fields}
 
 Rules:
-- Fill a field ONLY if the listing above clearly supports it (stated, or a direct, obvious consequence — e.g. jeans with a 5-pocket layout → Pocket Type "5-Pocket Design"; a size "32x30" → Waist Size "32 in", Inseam "30 in"). Otherwise leave it out. Never guess.
+- Fill a field ONLY if the listing or the photos clearly support it (stated, plainly visible, or a direct, obvious consequence — e.g. jeans with a 5-pocket layout → Pocket Type "5-Pocket Design"; a medium-blue denim wash → Fabric Wash "Medium"; a size "32x30" → Waist Size "32 in", Inseam "30 in"). Otherwise leave it out. Never guess.
 - When a list of values is given, use one of those values EXACTLY as written.
 - Season / Occasion / Theme / Style-type fields: only when the item's type, fabric, or description makes it clear.
 - Return ONLY JSON: {"Field name": "value"} — or an array of values for fields marked "several values allowed". No other text.`,
+              },
+            ],
           },
         ],
       },
