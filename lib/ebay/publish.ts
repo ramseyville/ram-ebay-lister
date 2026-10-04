@@ -30,6 +30,7 @@ import {
 } from "@/lib/conditions";
 import type { ListingResult } from "@/lib/types";
 import { cleanSpecificValue, fitDescription, normalizeDescription } from "@/lib/description";
+import { fillMissingAspects } from "./aspect-fill";
 import { cleanTitle, dropLowRetailPrice } from "@/lib/title";
 import { estimateShipping } from "@/lib/shipping";
 import {
@@ -823,12 +824,16 @@ function reconcileAspects(
       // Free-text field with eBay's own suggested values: use eBay's exact
       // spelling when the listing's value is one of them (case/plural only —
       // no fuzzy or numeric snapping, which could change a real measurement).
-      const ls = current.trim().toLowerCase();
-      const exact = a.values.find((v) => {
-        const lv = v.toLowerCase();
-        return lv === ls || lv === `${ls}s` || `${lv}s` === ls;
-      });
-      if (exact) aspects[a.name] = [exact];
+      const exactOf = (val: string) => {
+        const ls = val.trim().toLowerCase();
+        return (
+          a.values.find((v) => {
+            const lv = v.toLowerCase();
+            return lv === ls || lv === `${ls}s` || `${lv}s` === ls;
+          }) || val
+        );
+      };
+      aspects[a.name] = Array.from(new Set((aspects[a.name] || []).map(exactOf)));
     } else if (mustFill && !current) {
       const useDefault = !gate || gate.has(catKey);
       const defaultValue =
@@ -1935,6 +1940,9 @@ export async function publishListing(
         condPolicy ? Promise.resolve(condPolicy) : conditionPolicy(catId).catch(() => null),
       ]);
       if (meta.length) {
+        // Fill the category's empty fields from the listing, then validate
+        // everything (filled or not) against eBay's lists.
+        if (!aspectMeta.length) await fillMissingAspects(aspects, meta, listing);
         reconcileAspects(aspects, meta, listing, catKey);
         aspectMeta = meta;
         metaOk = true;

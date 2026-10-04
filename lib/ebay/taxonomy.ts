@@ -30,6 +30,8 @@ export interface AspectMeta {
   required: boolean;
   mode: AspectMode;
   values: string[]; // eBay's allowed/suggested values (full list for SELECTION_ONLY)
+  // eBay allows several values at once (e.g. Season: Fall, Spring).
+  multi?: boolean;
   // eBay's per-value dependencies (aspectValues[].valueConstraints): value →
   // { otherAspectName: [values it's valid with] }. E.g. on Size, "34" →
   // { "Size Type": ["Plus"] } means Size 34 only pairs with Size Type Plus.
@@ -139,6 +141,7 @@ export async function categoryAspects(categoryId: string): Promise<AspectMeta[]>
         name,
         required: Boolean(con?.aspectRequired),
         mode: con?.aspectMode === "SELECTION_ONLY" ? "SELECTION_ONLY" : "FREE_TEXT",
+        ...(con?.itemToAspectCardinality === "MULTI" ? { multi: true } : {}),
         values: (a?.aspectValues ?? [])
           .map((v: any) => String(v?.localizedValue ?? "").trim())
           .filter(Boolean),
