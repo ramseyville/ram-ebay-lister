@@ -7,12 +7,12 @@
 
 import { CONDITION_PARAGRAPH } from "@/lib/conditions";
 
-// The store sign-off, from the Courthouse Square Deals listing protocol
-// ("men's" dropped so it reads right on women's items too). Hard-coded so
+// The store sign-off, word for word from the Courthouse Square Deals listing
+// protocol (now "men's and women's" since the store lists both). Hard-coded so
 // the model can't reword it or add stats (feedback %, sales count) that go
 // stale.
 export const STORE_SIGN_OFF =
-  "Find more quality clothing, outdoor gear, and collectibles at Courthouse Square Deals on eBay. Ships fast from Texas.";
+  "Find more quality men’s and women’s clothing, outdoor gear, and collectibles at Courthouse Square Deals on eBay. Ships fast from Texas.";
 const SIGN_OFF_HTML = `<p><em>${STORE_SIGN_OFF}</em></p>`;
 
 /**

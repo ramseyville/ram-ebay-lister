@@ -9,6 +9,7 @@ import {
   applyConditionToDescription,
   buildConditionText,
   dropConflictingClaims,
+  priceWithEnding,
   conditionIdCandidates,
   conditionName,
   conditionStandard,
@@ -165,5 +166,18 @@ describe("condition wording follows the chosen grade", () => {
   it("replaces NWT in prose when the item isn't new with tags", () => {
     const out = applyConditionToDescription("<p>Polo Shirt Large — NWT, $98 retail.</p>", "Pre-owned - Good. Light wear.");
     expect(out).toContain("Polo Shirt Large — Pre-owned - Good, $98 retail.");
+  });
+});
+
+describe("price endings", () => {
+  it("ends new items in .95", () => {
+    expect(priceWithEnding(54.99, "NEW_WITH_TAGS")).toBe(54.95);
+    expect(priceWithEnding(40, "NEW_NO_TAGS")).toBe(39.95);
+    expect(priceWithEnding(44.95, "NEW_WITH_DEFECTS")).toBe(44.95);
+  });
+  it("ends pre-owned items in .99", () => {
+    expect(priceWithEnding(44.95, "EXCELLENT")).toBe(44.99);
+    expect(priceWithEnding(40, "GOOD")).toBe(39.99);
+    expect(priceWithEnding(29.5, "FAIR")).toBe(29.99);
   });
 });

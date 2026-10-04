@@ -356,3 +356,18 @@ export function applyConditionToDescription(html: string, conditionText: string)
   return src ? `${src}\n${para}` : para;
 }
 
+
+/**
+ * Mark's price endings: new items (NWT, NWOT, new in box, new with
+ * imperfections) end in .95; pre-owned items end in .99. A whole-dollar
+ * price drops to the ending just below it ($40 → $39.95); any other price
+ * keeps its dollars ($44.95 pre-owned → $44.99).
+ */
+export function priceWithEnding(price: number, condition: string | undefined): number {
+  if (!Number.isFinite(price) || price < 1) return price;
+  const ending = normalizeConditionGrade(condition).startsWith("NEW") ? 0.95 : 0.99;
+  const dollars = Math.floor(price + 1e-9);
+  const cents = Math.round((price - dollars) * 100);
+  const base = cents === 0 ? dollars - 1 : dollars;
+  return Math.round((base + ending) * 100) / 100;
+}

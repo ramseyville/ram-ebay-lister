@@ -34,3 +34,36 @@ export function cleanTitle(raw: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+// Mark's rule: a retail price only earns title characters when it's over $85.
+export const TITLE_PRICE_MIN = 85;
+
+/** Remove any "$N" retail price of $85 or less from a title. */
+export function dropLowRetailPrice(title: string, min = TITLE_PRICE_MIN): string {
+  return (title || "")
+    .replace(/\s*\$(\d+)\b/g, (m, n) => (Number(n) > min ? m : ""))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Plain color words buyers actually search. Brand color names ("Dark Seas",
+// "Blue Nights") aren't search terms; a title needs one of these too.
+const PLAIN_COLORS = [
+  "black", "white", "gray", "grey", "charcoal", "silver", "blue", "navy", "teal",
+  "turquoise", "green", "olive", "yellow", "gold", "orange", "red", "burgundy",
+  "maroon", "pink", "purple", "lavender", "brown", "tan", "beige", "khaki",
+  "cream", "ivory", "multicolor",
+];
+const PLAIN_COLOR_RE = new RegExp(`\\b(${PLAIN_COLORS.join("|")})\\b`, "i");
+
+export function hasPlainColor(text: string): boolean {
+  return PLAIN_COLOR_RE.test(text || "");
+}
+
+/** The first plain color word in the listing's color field, if any. */
+export function plainColorFrom(color: string | string[] | undefined): string | null {
+  const text = Array.isArray(color) ? color.join(" ") : color || "";
+  const m = PLAIN_COLOR_RE.exec(text);
+  if (!m) return null;
+  return m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+}
