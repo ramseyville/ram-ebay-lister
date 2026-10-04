@@ -2259,25 +2259,10 @@ export async function publishListing(
   // 3. Offer.
   const price = resolvePrice(listing.suggested_price);
 
-  // Apply a 3% promoted listing rate for high-competition brands and clothing
-  // categories where many similar items compete (Polo shorts, Tommy Bahama
-  // shirts, etc.). Promoted listings boost visibility in eBay search above
-  // organic rank for a small percentage of the final sale price.
-  const PROMOTED_BRANDS = new Set([
-    "polo ralph lauren", "tommy bahama", "peter millar", "faherty", "hugo boss",
-    "psycho bunny", "lacoste", "rhone", "johnnie-o", "southern tide",
-    "travis mathew", "travismathew", "brooks brothers", "burberry", "zegna",
-    "armani", "lacoste", "vineyard vines", "patagonia", "orvis", "pendleton",
-    "columbia", "the north face", "under armour", "nike", "adidas",
-  ]);
-  const PROMOTED_CATEGORIES = new Set([
-    "mens_top", "mens_pants", "mens_shorts", "mens_jacket", "mens_coat",
-    "mens_sweater", "mens_jeans", "womens_top", "womens_pants", "womens_jacket",
-    "mens_polo", "womens_polo", "mens_casual_shirt", "mens_tshirt", "mens_hoodie",
-  ]);
-  const brandLower = String(listing.brand || "").toLowerCase().trim();
-  const isPromoted =
-    PROMOTED_BRANDS.has(brandLower) || PROMOTED_CATEGORIES.has(catKey);
+  // No Promoted Listings from the app: Mark sets ad rates himself in Seller
+  // Hub (bulk edit / Advertising) per item, since a blanket rate isn't
+  // profitable on low-competition items. (The old 3% "promotedListingPolicy"
+  // here was never a real Offer field, so eBay silently ignored it anyway.)
 
   const offerBody: any = {
     sku,
@@ -2304,14 +2289,10 @@ export async function publishListing(
           : setup.fulfillmentPolicyId,
       paymentPolicyId: setup.paymentPolicyId,
       returnPolicyId: setup.returnPolicyId,
-      ...(isPromoted
-        ? {
-            promotedListingPolicy: {
-              bidPercentage: "3.0",
-              campaignId: undefined, // eBay auto-assigns to default campaign
-            },
-          }
-        : {}),
+      // Accept offers on every listing, deliberately with NO auto-accept or
+      // auto-decline price: Mark lowers prices later, and a fixed threshold
+      // would go stale (or auto-accept below a lowered price's intent).
+      bestOfferTerms: { bestOfferEnabled: true },
     },
     includeCatalogProductDetails: false,
     // Custom label = SKU so it appears and is editable in Seller Hub
@@ -2421,6 +2402,21 @@ async function publishOfferWithRecovery(
 
   let r = await doPublish();
   if (r.ok) return { success: true, sku, offerId, listingId: r.json?.listingId || "" };
+
+  // Recovery: a few categories don't allow Best Offer. Post without it
+  // rather than fail the whole listing.
+  if (/best\s*offer/i.test(r.text) && ctx.offerBody.listingPolicies?.bestOfferTerms) {
+    const policies = { ...ctx.offerBody.listingPolicies };
+    delete policies.bestOfferTerms;
+    ctx.offerBody.listingPolicies = policies;
+    console.error(`[publish] ${sku}: eBay refused Best Offer for this category — posting without it`);
+    await ebayRequest(accessToken, "PUT", `${EBAY_INV_BASE}/offer/${offerId}`, {
+      body: updateOfferBody(ctx.offerBody),
+      extraHeaders: CL,
+    });
+    r = await doPublish();
+    if (r.ok) return { success: true, sku, offerId, listingId: r.json?.listingId || "" };
+  }
 
   let eids = errorIds(r);
 
