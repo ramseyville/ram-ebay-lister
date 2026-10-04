@@ -10,7 +10,7 @@ import {
 import { toImageBlock, type ImageBlock } from "@/lib/images";
 import type { AnalyzeRequestBody, ListingResult } from "@/lib/types";
 import { cleanSpecificValue, normalizeDescription } from "@/lib/description";
-import { cleanTitle, titleLengthOk } from "@/lib/title";
+import { cleanTitle, dropLowRetailPrice, hasPlainColor, plainColorFrom, titleLengthOk } from "@/lib/title";
 
 // Analysis can take 30-90s with the expanded prompt + web searches. Pro plan supports 300s.
 export const maxDuration = 300;
@@ -127,22 +127,36 @@ async function repairTitleLength(
   listing: ListingResult
 ): Promise<void> {
   const originalTitle = listing.title ?? "";
-  listing.title = cleanTitle(originalTitle);
-  if (titleLengthOk(listing.title)) return;
+  const tidy = (t: string) => dropLowRetailPrice(cleanTitle(t));
+  listing.title = tidy(originalTitle);
+  // Mark's protocol: a title needs a plain color word buyers search for
+  // ("Blue"), not only a brand color name ("Blue Nights" is fine, "Dark
+  // Seas" alone is not). Only enforced when the listing's color field gives
+  // us a plain color to ask for.
+  const plainColor = plainColorFrom(listing.color);
+  const titleOk = (t: string) => titleLengthOk(t) && (!plainColor || hasPlainColor(t));
+  if (titleOk(listing.title)) return;
 
   console.error(
-    `[analyze] title out of range from initial generation: ${originalTitle.length} chars — "${originalTitle}"`
+    `[analyze] title needs repair from initial generation: ${originalTitle.length} chars — "${originalTitle}"`
   );
 
   const MAX_ATTEMPTS = 3;
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
     const current = listing.title ?? "";
-    if (titleLengthOk(current)) return;
+    if (titleOk(current)) return;
 
-    const direction =
-      current.length < 77
+    const colorNote =
+      plainColor && !hasPlainColor(current)
+        ? ` It is also missing a plain color word buyers search for — include "${plainColor}" (a brand color name alone isn't a search term).`
+        : "";
+    const lengthNote =
+      titleLengthOk(current)
+        ? `Its length is fine, so swap out a weaker word to make room rather than lengthening it.`
+        : current.length < 77
         ? `It is TOO SHORT by ${77 - current.length}-${80 - current.length} characters. Add more searchable keywords — do not pad with generic filler like "Casual." Good options to add, in priority order: a size format variant (e.g. "Size Large" instead of "L"), fabric/material name, fit descriptor (Slim, Relaxed, Regular), color detail, era/decade if vintage, or a genuinely specific occasion (Golf, Resort, Travel, Beach) only if it truly fits the item.`
         : `It is TOO LONG by ${current.length - 80} characters. Trim the least essential descriptor — keep brand, item type, color, and size intact.`;
+    const direction = lengthNote + colorNote;
 
     try {
       const resp = await client.messages.create({
@@ -154,7 +168,7 @@ async function repairTitleLength(
             content: [
               {
                 type: "text",
-                text: `This eBay listing title is exactly ${current.length} characters, counted with a monospace ruler. It MUST be 77-80 characters — this is non-negotiable protocol, not a guideline.\n\nCurrent title: "${current}"\n\n${direction}\n\nDo not change the brand, item type, or condition claims. Keep the order Brand, Model/Product Line, Item Type, then descriptors. No punctuation or symbols (% & / - ' etc.) — write a retail price as a bare "$145", never with "MSRP" or "retail". Count every character of your revised title (including spaces) before answering — write out the count mentally first. Respond with ONLY this JSON, nothing else, no explanation: {"title": "..."}`,
+                text: `This eBay listing title is exactly ${current.length} characters, counted with a monospace ruler. It MUST be 77-80 characters — this is non-negotiable protocol, not a guideline.\n\nCurrent title: "${current}"\n\n${direction}\n\nDo not change the brand, item type, or condition claims. Keep the order Brand, Model/Product Line, Item Type, then descriptors. No punctuation or symbols (% & / - ' etc.) — write a retail price as a bare "$145" (only when it is over $85), never with "MSRP" or "retail". Count every character of your revised title (including spaces) before answering — write out the count mentally first. Respond with ONLY this JSON, nothing else, no explanation: {"title": "..."}`,
               },
             ],
           },
@@ -163,7 +177,7 @@ async function repairTitleLength(
       const text = firstText(resp);
       const fixed = parseModelJson<{ title?: string }>(text);
       if (fixed?.title) {
-        listing.title = cleanTitle(fixed.title);
+        listing.title = tidy(fixed.title);
         console.error(
           `[analyze] title repair attempt ${i + 1}: ${fixed.title.length} chars — "${fixed.title}"`
         );
@@ -177,7 +191,7 @@ async function repairTitleLength(
   }
 
   const finalLen = (listing.title ?? "").length;
-  if (!titleLengthOk(listing.title ?? "")) {
+  if (!titleOk(listing.title ?? "")) {
     console.error(
       `[analyze] title still out of range after ${MAX_ATTEMPTS} repair attempts: ${finalLen} chars — "${listing.title}" (original was "${originalTitle}")`
     );
