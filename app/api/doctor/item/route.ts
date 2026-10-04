@@ -3,6 +3,7 @@ import { guardApiRequest } from "@/lib/api-guard";
 import { EBAY_COOKIE, accessTokenFromCookie } from "@/lib/ebay/session";
 import { getItem } from "@/lib/ebay/trading";
 import { proposeFixes } from "@/lib/ebay/doctor";
+import { latestApplied } from "@/lib/ebay/doctor-apply";
 
 // Listing Doctor: one listing's current data + the free fixes it would get.
 // Read-only — nothing is written to eBay.
@@ -31,7 +32,10 @@ export async function POST(req: NextRequest) {
   try {
     const item = await getItem(token, itemId);
     const proposal = await proposeFixes(item);
-    return NextResponse.json({ ok: true, item, proposal });
+    // Already changed by the Doctor (and not undone)? A database hiccup
+    // must not block the read-only preview.
+    const applied = await latestApplied(itemId).catch(() => null);
+    return NextResponse.json({ ok: true, item, proposal, applied });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
   }
