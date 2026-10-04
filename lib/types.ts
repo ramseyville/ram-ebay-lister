@@ -35,6 +35,11 @@ export interface AnalyzeRequestBody {
   // Browser-resized JPEG data URLs or raw base64 strings.
   images: { mediaType: string; data: string }[];
   profile: string;
+  // Listing Doctor: photos already hosted on eBay (used instead of / in
+  // addition to uploaded images), and the existing listing's details to
+  // rewrite from.
+  imageUrls?: string[];
+  existing?: string;
   // Seller's own notes about the item (condition, flaws, "new with tags"),
   // given to the model alongside the photos.
   notes?: string;
