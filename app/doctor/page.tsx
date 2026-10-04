@@ -1,8 +1,9 @@
 "use client";
 
-// Listing Doctor — test run (preview only). Reads the oldest listings by SKU,
-// shows the free rule-based fixes and a full AI rewrite side by side, and
-// estimates the rewrite cost. Nothing here writes to eBay.
+// Listing Doctor — test run. Reads the oldest listings by SKU, shows the free
+// rule-based fixes and a full AI rewrite side by side with the AI cost, then
+// applies the version chosen per listing — each one backed up to the database
+// first, with Undo.
 
 import { useState } from "react";
 import { apiPost } from "@/lib/api-client";
@@ -55,6 +56,8 @@ interface Rewrite {
   cost: number;
 }
 
+type Choice = "rewrite" | "free" | "skip";
+
 interface Row {
   summary: Summary;
   status: "waiting" | "reading" | "rewriting" | "done" | "error";
@@ -62,6 +65,9 @@ interface Row {
   proposal?: Proposal;
   rewrite?: Rewrite;
   error?: string;
+  choice: Choice;
+  apply?: "applying" | "applied" | "undoing" | "undone" | "error";
+  applyError?: string;
 }
 
 // Claude Sonnet 5 list prices (per token) — the rewrite model.
@@ -88,7 +94,15 @@ function Frame({ html }: { html: string }) {
   return <iframe className="doc-frame" sandbox="" srcDoc={html} title="description" />;
 }
 
-function Card({ row }: { row: Row }) {
+function Card({
+  row,
+  onChoice,
+  onUndo,
+}: {
+  row: Row;
+  onChoice: (c: Choice) => void;
+  onUndo: () => void;
+}) {
   const [tab, setTab] = useState<"old" | "fixed" | "rewrite">("rewrite");
   const { item, proposal, rewrite } = row;
   return (
@@ -110,6 +124,29 @@ function Card({ row }: { row: Row }) {
         <span className={`doc-status ${row.status}`}>{row.status === "done" ? "✓ preview ready" : row.status}</span>
       </div>
       {row.error && <p className="pricing-error">⚠️ {row.error}</p>}
+      {proposal && (
+        <div className="doc-apply">
+          {row.apply === "applied" ? (
+            <>
+              <span className="doc-status done">✓ Applied to eBay (backed up)</span>
+              <button type="button" className="btn btn-ghost" onClick={onUndo}>Undo</button>
+            </>
+          ) : row.apply === "applying" || row.apply === "undoing" ? (
+            <span className="doc-meta">{row.apply === "applying" ? "Backing up and applying…" : "Restoring from backup…"}</span>
+          ) : (
+            <label className="doc-meta">
+              Apply:{" "}
+              <select value={row.choice} onChange={(e) => onChoice(e.target.value as Choice)}>
+                <option value="rewrite" disabled={!rewrite}>AI rewrite</option>
+                <option value="free">Free fixes only</option>
+                <option value="skip">Skip</option>
+              </select>
+              {row.apply === "undone" && <span className="doc-status"> · restored from backup</span>}
+            </label>
+          )}
+          {row.applyError && <p className="pricing-error">⚠️ {row.applyError}</p>}
+        </div>
+      )}
       {item && proposal && (
         <>
           <table className="doc-table">
@@ -179,7 +216,7 @@ export default function DoctorPage() {
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Couldn't read your listings.");
       setTotal(data.total);
-      setRows((data.items as Summary[]).map((summary) => ({ summary, status: "waiting" })));
+      setRows((data.items as Summary[]).map((summary) => ({ summary, status: "waiting", choice: "rewrite" })));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -196,7 +233,12 @@ export default function DoctorPage() {
       if (!data.ok) throw new Error(data.error || "Couldn't read this listing.");
       const item = data.item as ItemData;
       const proposal = data.proposal as Proposal;
-      update(id, { item, proposal, status: "rewriting" });
+      update(id, { item, proposal, status: "rewriting", ...(data.applied ? { apply: "applied" as const } : {}) });
+      // Already changed by the Doctor — don't spend on a fresh rewrite.
+      if (data.applied) {
+        update(id, { status: "done", choice: "skip" });
+        return;
+      }
 
       if (!item.pictures.length) throw new Error("This listing has no photos to rewrite from.");
       const aRes = await apiPost("/api/analyze", {
@@ -248,7 +290,62 @@ export default function DoctorPage() {
     setBusy(false);
   }
 
+  function versionFor(row: Row) {
+    const p = row.proposal!;
+    const r = row.choice === "rewrite" ? row.rewrite : undefined;
+    return {
+      title: r ? r.title : p.title,
+      description: r ? r.description : p.description,
+      price: p.price,
+      categoryId: p.categoryId,
+      specifics: r ? r.specifics : p.specifics,
+    };
+  }
+
+  async function applyApproved() {
+    const ready = rows.filter(
+      (r) => r.proposal && r.choice !== "skip" && r.apply !== "applied" && (r.choice === "free" || r.rewrite)
+    );
+    if (!ready.length) return;
+    if (
+      !window.confirm(
+        `Apply ${ready.length} listing${ready.length === 1 ? "" : "s"} to eBay now? Each one is backed up to the database first and can be undone.`
+      )
+    )
+      return;
+    setBusy(true);
+    for (const row of ready) {
+      const id = row.summary.itemId;
+      update(id, { apply: "applying", applyError: undefined });
+      try {
+        const res = await apiPost("/api/doctor/apply", { itemId: id, version: versionFor(row) });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "eBay didn't accept the change.");
+        update(id, { apply: "applied" });
+      } catch (e) {
+        update(id, { apply: "error", applyError: (e as Error).message });
+      }
+    }
+    setBusy(false);
+  }
+
+  async function undo(itemId: string) {
+    if (!window.confirm("Restore this listing exactly as it was before the Doctor changed it?")) return;
+    update(itemId, { apply: "undoing", applyError: undefined });
+    try {
+      const res = await apiPost("/api/doctor/undo", { itemId });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Undo failed.");
+      update(itemId, { apply: "undone" });
+    } catch (e) {
+      update(itemId, { apply: "applied", applyError: (e as Error).message });
+    }
+  }
+
   const done = rows.filter((r) => r.rewrite);
+  const approved = rows.filter(
+    (r) => r.proposal && r.choice !== "skip" && r.apply !== "applied" && (r.choice === "free" || r.rewrite)
+  ).length;
   const cost = done.reduce((s, r) => s + (r.rewrite?.cost || 0), 0);
 
   return (
@@ -257,7 +354,7 @@ export default function DoctorPage() {
         <span className="logo-mark" aria-hidden="true">🩺</span>
         <div>
           <h1>Listing Doctor — test run</h1>
-          <p>Preview only: nothing is changed on eBay. <a href="/">← Back to Listing Writer</a></p>
+          <p>Nothing changes on eBay until you click Apply — and every change is backed up and can be undone. <a href="/">← Back to Listing Writer</a></p>
         </div>
       </header>
 
@@ -267,6 +364,9 @@ export default function DoctorPage() {
         </button>
         <button type="button" className="btn btn-secondary" onClick={previewAll} disabled={busy || !rows.length}>
           2 · Preview fixes + AI rewrites
+        </button>
+        <button type="button" className="btn btn-primary" onClick={applyApproved} disabled={busy || !approved}>
+          3 · Apply {approved || ""} approved to eBay
         </button>
         {total !== null && <span className="doc-meta">{total} active listings in your store.</span>}
         {done.length > 0 && (
@@ -278,7 +378,12 @@ export default function DoctorPage() {
       </section>
 
       {rows.map((row) => (
-        <Card key={row.summary.itemId} row={row} />
+        <Card
+          key={row.summary.itemId}
+          row={row}
+          onChoice={(choice) => update(row.summary.itemId, { choice })}
+          onUndo={() => undo(row.summary.itemId)}
+        />
       ))}
     </main>
   );
