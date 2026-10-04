@@ -19,6 +19,7 @@ import {
 import {
   CONDITION_ID_ENUM,
   applyConditionToDescription,
+  priceWithEnding,
   buildConditionText,
   conditionIdCandidates,
   conditionIdForEnum,
@@ -29,7 +30,7 @@ import {
 } from "@/lib/conditions";
 import type { ListingResult } from "@/lib/types";
 import { cleanSpecificValue, fitDescription, normalizeDescription } from "@/lib/description";
-import { cleanTitle } from "@/lib/title";
+import { cleanTitle, dropLowRetailPrice } from "@/lib/title";
 import { estimateShipping } from "@/lib/shipping";
 import {
   APPAREL_CATEGORIES,
@@ -2100,7 +2101,8 @@ export async function publishListing(
   }
 
   // No punctuation or symbols in titles; a retail price reads as a bare "$145".
-  ebayTitle = cleanTitle(ebayTitle).slice(0, 80).trim();
+  // Retail price only when it's over $85.
+  ebayTitle = dropLowRetailPrice(cleanTitle(ebayTitle)).slice(0, 80).trim();
   // A title claiming NWT/New With Tags on an item listed under any other
   // condition misstates it — drop the claim (padding below refills length).
   if (!listedAsNwt) {
@@ -2257,7 +2259,8 @@ export async function publishListing(
   }
 
   // 3. Offer.
-  const price = resolvePrice(listing.suggested_price);
+  // .95 for new items, .99 for pre-owned (Mark's price-ending rule).
+  const price = priceWithEnding(resolvePrice(listing.suggested_price), listing.condition);
 
   // No Promoted Listings from the app: Mark sets ad rates himself in Seller
   // Hub (bulk edit / Advertising) per item, since a blanket rate isn't
