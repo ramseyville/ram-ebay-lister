@@ -166,3 +166,39 @@ export function parseItemXml(xml: string): TradingItem {
     url: tag(item, "ViewItemURL"),
   };
 }
+
+export interface ReviseFields {
+  title?: string;
+  description?: string; // HTML
+  price?: number;
+  categoryId?: string;
+  specifics?: Record<string, string[]>; // replaces ALL item specifics
+  bestOfferEnabled?: boolean; // auto-accept/decline are never touched
+}
+
+function cdata(s: string): string {
+  return `<![CDATA[${s.replace(/]]>/g, "]]]]><![CDATA[>")}]]>`;
+}
+
+/** Revise a live listing in place (keeps item number, watchers, sales history). */
+export async function reviseItem(token: string, itemId: string, f: ReviseFields): Promise<void> {
+  const parts = [`<ItemID>${xmlEscape(itemId)}</ItemID>`];
+  if (f.title !== undefined) parts.push(`<Title>${xmlEscape(f.title.slice(0, 80))}</Title>`);
+  if (f.description !== undefined) parts.push(`<Description>${cdata(f.description)}</Description>`);
+  if (f.price !== undefined && f.price > 0) parts.push(`<StartPrice>${f.price.toFixed(2)}</StartPrice>`);
+  if (f.categoryId) parts.push(`<PrimaryCategory><CategoryID>${xmlEscape(f.categoryId)}</CategoryID></PrimaryCategory>`);
+  if (f.specifics) {
+    const lists = Object.entries(f.specifics)
+      .filter(([name, vals]) => name && vals.length)
+      .map(
+        ([name, vals]) =>
+          `<NameValueList><Name>${xmlEscape(name)}</Name>${vals.map((v) => `<Value>${xmlEscape(v)}</Value>`).join("")}</NameValueList>`
+      )
+      .join("");
+    parts.push(`<ItemSpecifics>${lists}</ItemSpecifics>`);
+  }
+  if (f.bestOfferEnabled !== undefined) {
+    parts.push(`<BestOfferDetails><BestOfferEnabled>${f.bestOfferEnabled}</BestOfferEnabled></BestOfferDetails>`);
+  }
+  await call(token, "ReviseFixedPriceItem", `<Item>${parts.join("")}</Item>`);
+}
