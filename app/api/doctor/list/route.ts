@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const count = Math.min(Math.max(Number(body?.count) || 20, 1), 200);
+  const offset = Math.max(Number(body?.offset) || 0, 0);
 
   let token: string | null;
   try {
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   try {
     const all = await listActiveListings(token);
     all.sort((a, b) => compareSkus(a.sku, b.sku));
-    return NextResponse.json({ ok: true, total: all.length, items: all.slice(0, count) });
+    return NextResponse.json({ ok: true, total: all.length, items: all.slice(offset, offset + count) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
   }
