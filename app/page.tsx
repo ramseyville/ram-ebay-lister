@@ -664,6 +664,7 @@ export default function Home() {
         <div>
           <h1>Listing Writer</h1>
           <p>Upload a pile of photos · auto-sort into items · write every listing.</p>
+          <p><a href="/doctor">🩺 Listing Doctor (test run)</a></p>
         </div>
       </header>
 
