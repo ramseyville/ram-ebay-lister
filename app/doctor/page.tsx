@@ -354,7 +354,7 @@ export default function DoctorPage() {
         <span className="logo-mark" aria-hidden="true">🩺</span>
         <div>
           <h1>Listing Doctor — test run</h1>
-          <p>Nothing changes on eBay until you click Apply — and every change is backed up and can be undone. <a href="/">← Back to Listing Writer</a></p>
+          <p>Nothing changes on eBay until you click Apply — and every change is backed up and can be undone. <a href="/">← Back to Listing Writer</a> · <a href="/doctor/describe-test">🧪 Description cost test</a></p>
         </div>
       </header>
 
