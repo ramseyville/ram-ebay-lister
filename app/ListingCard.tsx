@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ItemGroup, ListingResult, Photo } from "@/lib/types";
 import { formatShipping, estimateShipping } from "@/lib/shipping";
+import { compLevels, soldSearchUrl, terapeakUrl } from "@/lib/comps";
 import { apiPost } from "@/lib/api-client";
 import {
   CONDITION_GRADES,
@@ -116,6 +117,8 @@ export function ListingCard({
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingResult, setPricingResult] = useState<string | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
+  // Real sold prices the seller copies from eBay's sold search / Terapeak.
+  const [soldNotes, setSoldNotes] = useState("");
   const [livePriceInput, setLivePriceInput] = useState(
     priceToInput(group.listing?.suggested_price)
   );
@@ -153,7 +156,7 @@ export function ListingCard({
         .filter(Boolean)
         .map((p) => ({ mediaType: p!.mediaType, data: p!.data }));
 
-      const res = await apiPost("/api/pricing", { listing, photos });
+      const res = await apiPost("/api/pricing", { listing, photos, soldNotes });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Pricing analysis failed.");
       setPricingResult(data.analysis);
@@ -469,6 +472,29 @@ export function ListingCard({
           {/* Pricing analysis panel */}
           {listing && (
             <div className="pricing-panel">
+              <div className="sold-check">
+                <span className="k">Check real sold prices:</span>
+                <span className="sold-links">
+                  {compLevels(listing).map((level) => (
+                    <a key={level.key} href={soldSearchUrl(level)} target="_blank" rel="noopener noreferrer">
+                      {level.label}
+                    </a>
+                  ))}
+                  <a href={terapeakUrl(compLevels(listing)[0])} target="_blank" rel="noopener noreferrer">
+                    Terapeak (exact)
+                  </a>
+                  <a href={terapeakUrl(compLevels(listing)[3])} target="_blank" rel="noopener noreferrer">
+                    Terapeak (broad)
+                  </a>
+                </span>
+                <textarea
+                  className="sold-notes"
+                  rows={2}
+                  value={soldNotes}
+                  placeholder="Optional: paste sold prices or Terapeak results (avg sold, sell-through, # sold / # active), then get pricing analysis"
+                  onChange={(e) => setSoldNotes(e.target.value)}
+                />
+              </div>
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -484,7 +510,7 @@ export function ListingCard({
               {pricingOpen && (
                 <div className="pricing-result">
                   {pricingLoading && (
-                    <p className="pricing-loading">Pulling eBay sold comps and analyzing photos…</p>
+                    <p className="pricing-loading">Matching eBay listings (exact, then wider) and analyzing photos…</p>
                   )}
                   {pricingError && (
                     <p className="pricing-error">⚠️ {pricingError}</p>

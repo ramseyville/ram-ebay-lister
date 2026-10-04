@@ -1187,3 +1187,26 @@ textarea {
 
 
 
+
+.sold-check {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+}
+.sold-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.sold-links a {
+  text-decoration: underline;
+}
+.sold-notes {
+  width: 100%;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 6px 8px;
+  resize: vertical;
+}
