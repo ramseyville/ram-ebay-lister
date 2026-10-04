@@ -206,7 +206,23 @@ async function repairTitleLength(
 // tool call (e.g. "Let me check the size chart...") and the real JSON
 // payload in a later text block after the search result. Take the LAST
 // text block, not the first, so we don't try to parse narration as JSON.
+//
+// But with web search, the final answer itself often arrives split across
+// several text blocks (each cited fact becomes its own block), so the last
+// block alone can be a fragment of the JSON — confirmed in the logs as
+// "Model did not return valid JSON" on a Listing Doctor rewrite. Join every
+// text block after the last search result instead.
 function lastText(resp: Anthropic.Message): string {
+  let start = 0;
+  resp.content.forEach((b, i) => {
+    if (b.type === "server_tool_use" || b.type === "web_search_tool_result") start = i + 1;
+  });
+  const joined = resp.content
+    .slice(start)
+    .map((b) => (b.type === "text" ? b.text : ""))
+    .join("")
+    .trim();
+  if (joined) return joined;
   const textBlocks = resp.content.filter((b) => b.type === "text");
   const block = textBlocks[textBlocks.length - 1];
   return block && block.type === "text" ? block.text.trim() : "";
