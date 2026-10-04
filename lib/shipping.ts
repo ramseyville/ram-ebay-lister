@@ -22,6 +22,8 @@ const WEIGHTS: Record<string, { oz: number; dims: ShippingDimensions; note: stri
   womens_jacket:  { oz: 24, dims: POLY_MAILER, note: "Jacket - poly mailer 12x12x1" },
   womens_coat:    { oz: 28, dims: POLY_MAILER, note: "Coat - poly mailer 12x12x1" },
   mens_sweater:   { oz: 20, dims: POLY_MAILER, note: "Sweater - poly mailer 12x12x1" },
+  mens_hoodie:    { oz: 20, dims: POLY_MAILER, note: "Hoodie/Sweatshirt - poly mailer 12x12x1" },
+  womens_hoodie:  { oz: 16, dims: POLY_MAILER, note: "Hoodie/Sweatshirt - poly mailer 12x12x1" },
   mens_shoes:     { oz: 36, dims: SMALL_BOX,   note: "Shoes - small box 12x12x3" },
   womens_shoes:   { oz: 28, dims: SMALL_BOX,   note: "Shoes - small box 12x12x3" },
   handbag:        { oz: 20, dims: SMALL_BOX,   note: "Handbag - small box 12x12x3" },
