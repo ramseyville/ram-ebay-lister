@@ -138,10 +138,18 @@ async function reviseInventoryListing(
 export async function applyVersion(
   token: string,
   itemId: string,
-  v: DoctorVersion
+  v: DoctorVersion,
+  opts: { onlyIfPrice?: number } = {}
 ): Promise<{ backupId: number; specifics: number; path: "seller-hub" | "app" }> {
   await ensureSchema();
   const current = await getItem(token, itemId);
+  // A queued bulk fix was planned from an earlier read: never undo a price the
+  // seller changed on eBay since then.
+  if (opts.onlyIfPrice !== undefined && Math.abs(current.price - opts.onlyIfPrice) > 0.001) {
+    throw new Error(
+      `The price changed on eBay since this listing was scanned ($${opts.onlyIfPrice.toFixed(2)} → $${current.price.toFixed(2)}). Nothing was changed — retry to re-scan it.`
+    );
+  }
   const inventory = await findInventoryListing(token, current.sku, itemId);
   const specifics = await finalSpecifics(v, current);
   const categoryId = v.categoryId && v.categoryId !== current.categoryId ? v.categoryId : undefined;
