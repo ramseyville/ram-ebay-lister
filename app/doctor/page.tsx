@@ -202,20 +202,23 @@ function Card({
 export default function DoctorPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState<number | null>(null);
+  // Where the next "find" starts, so each run moves on to listings not seen yet.
+  const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const update = (itemId: string, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r) => (r.summary.itemId === itemId ? { ...r, ...patch } : r)));
 
-  async function loadOldest() {
+  async function loadBatch(from: number) {
     setBusy(true);
     setError("");
     try {
-      const res = await apiPost("/api/doctor/list", { count: 20 });
+      const res = await apiPost("/api/doctor/list", { count: 20, offset: from });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Couldn't read your listings.");
       setTotal(data.total);
+      setOffset(from + 20);
       setRows((data.items as Summary[]).map((summary) => ({ summary, status: "waiting", choice: "rewrite" })));
     } catch (e) {
       setError((e as Error).message);
@@ -354,14 +357,19 @@ export default function DoctorPage() {
         <span className="logo-mark" aria-hidden="true">🩺</span>
         <div>
           <h1>Listing Doctor — test run</h1>
-          <p>Nothing changes on eBay until you click Apply — and every change is backed up and can be undone. <a href="/">← Back to Listing Writer</a> · <a href="/doctor/describe-test">🧪 Description cost test</a></p>
+          <p>Nothing changes on eBay until you click Apply — and every change is backed up and can be undone. <a href="/">← Back to Listing Writer</a> · <a href="/doctor/describe-test">🧪 Description cost test</a> · <a href="/doctor/bulk"><strong>Whole store (bulk, cheapest) →</strong></a></p>
         </div>
       </header>
 
       <section className="doc-controls">
-        <button type="button" className="btn btn-primary" onClick={loadOldest} disabled={busy}>
-          1 · Find my 20 oldest listings (lowest SKUs)
+        <button type="button" className="btn btn-primary" onClick={() => loadBatch(offset)} disabled={busy}>
+          1 · {offset === 0 ? "Find my 20 oldest listings (lowest SKUs)" : `Find the next 20 (listings ${offset + 1}–${offset + 20})`}
         </button>
+        {offset > 0 && (
+          <button type="button" className="btn btn-ghost" onClick={() => loadBatch(0)} disabled={busy}>
+            Start over from the oldest
+          </button>
+        )}
         <button type="button" className="btn btn-secondary" onClick={previewAll} disabled={busy || !rows.length}>
           2 · Preview fixes + AI rewrites
         </button>

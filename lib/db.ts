@@ -45,6 +45,28 @@ export function ensureSchema(): Promise<void> {
        )`
     )
       .then(() => query(`CREATE INDEX IF NOT EXISTS doctor_backups_item ON doctor_backups (item_id)`))
+      // Bulk Doctor: one row per active listing, so a run picks up where the
+      // last one stopped instead of starting from the oldest 20 again.
+      .then(() =>
+        query(
+          `CREATE TABLE IF NOT EXISTS doctor_queue (
+             item_id        TEXT PRIMARY KEY,
+             sku            TEXT,
+             title          TEXT,
+             sku_order      INTEGER NOT NULL DEFAULT 0,
+             status         TEXT NOT NULL DEFAULT 'new',
+             needs_ai       BOOLEAN NOT NULL DEFAULT false,
+             item           JSONB,
+             proposal       JSONB,
+             ai_description TEXT,
+             ai_cost        NUMERIC,
+             batch_id       TEXT,
+             error          TEXT,
+             updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+           )`
+        )
+      )
+      .then(() => query(`CREATE INDEX IF NOT EXISTS doctor_queue_status ON doctor_queue (status, sku_order)`))
       .then(() => undefined)
       .catch((e) => {
         ready = null; // retry next time
