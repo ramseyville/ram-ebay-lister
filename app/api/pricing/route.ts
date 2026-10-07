@@ -89,6 +89,39 @@ async function fetchEbayComps(listing: ListingResult): Promise<string> {
   );
 }
 
+// Fixed pricing instructions — identical on every request, so they're sent as
+// a cached system prompt (cache reads bill at ~10% of normal input price).
+const PRICING_INSTRUCTIONS = `You are an expert eBay reseller pricing analyst. Analyze the photos and the real eBay listing data in the user message to recommend a price.
+
+INSTRUCTIONS:
+- Study all photos: front shot shows overall condition; tag/label/hang tag photos show exact brand, size, material, and MSRP
+- The MSRP from the hang tag (if visible) is a key pricing anchor — note it prominently
+- The active listings in the user message are CURRENT ASKING prices, not sold data. Use them as a ceiling/positioning signal and the total active count as supply/competition. Note the match level used (exact vs. widened) and say how close the comps really are.
+- If REAL SOLD DATA was pasted, base the recommended price on it first: give the sold price range and average, and if the pasted data includes sold and active counts (e.g. Terapeak's), give sell-through = sold ÷ (sold + active). Never invent sold numbers. for, and say so plainly rather than calling them "comps" or implying they're sold prices.
+- You have a real web_search tool (up to 3 uses) — don't skip this, and don't burn all 3 on one vague search. Spend them deliberately, in this order of priority:
+  1. If a style number, product-line name, or distinctive construction detail (e.g. "snap-front varsity," a named fabric/mill) is visible or identifiable from the photos, search for the brand + that specific detail FIRST — confirming the exact product is worth more than a generic brand search, because it's what makes the MSRP and comps trustworthy rather than a category guess.
+  2. Once you've confirmed the exact product (or if you can't), search for its real current/original MSRP from the brand's own site or a reputable retailer.
+  3. If you have a search left, search site:ebay.com plus the brand/product line to see what real, currently-listed sellers use as keywords/phrasing for this same or a closely matching item — especially useful when the active-listing data above has no close match to this item's specific construction/style.
+  Cite what you actually found; never state a fact you didn't verify as if you looked it up. If a search comes up empty, say so and move to the next priority rather than retrying the same query.
+- Only compare same condition: pre-owned to pre-owned, NWT to NWT
+- Flag extended size scarcity premium (XL+, waist 38+) if applicable
+- If both the active-listing data and web search come up thin, say so explicitly — don't paper over a real data gap with a confident-sounding guess
+
+OUTPUT:
+**Sold Data:** Sold range, average, and sell-through from the pasted sold data — or "none provided; check sold links"
+**Active Competition:** Match level used, total active competing listings, and their asking-price range/median (asking prices, not sold)
+**MSRP:** From hang tag if visible, else from a verified web search result (name the source), else "not found"
+**Recommended BIN:** $X.XX with brief rationale — price endings: new items (NWT, NWOT, new in box, new with imperfections) end in .95; pre-owned items end in .99
+**Best Offer:** Yes (always on; the seller reviews every offer personally — no auto-accept or auto-decline)
+**Suggested accept floor:** $X.XX (guidance for the seller's manual review only)
+**Counter guidance:** What to counter below floor
+**Confidence:** High / Medium / Low
+**Notes:** Scarcity premium, condition flags, or data gaps`;
+
+const PRICING_SYSTEM = [
+  { type: "text" as const, text: PRICING_INSTRUCTIONS, cache_control: { type: "ephemeral" as const } },
+];
+
 export async function POST(req: NextRequest) {
   const denied = guardApiRequest(req);
   if (denied) return denied;
@@ -144,42 +177,24 @@ export async function POST(req: NextRequest) {
     source: { type: "base64" as const, media_type: p.mediaType as "image/jpeg" | "image/png" | "image/webp", data: p.data },
   }));
 
+  // Item-specific data goes in the user turn; the long, fixed instructions
+  // live in PRICING_INSTRUCTIONS as a cached system prompt.
   const textBlock = {
     type: "text" as const,
-    text: `You are an expert eBay reseller pricing analyst. Analyze the photos and the real eBay listing data to recommend a price.
-
-ITEM:
+    text: `ITEM:
 ${itemSummary}
 
 ${comps}
 
 ${soldBlock}
 
-INSTRUCTIONS:
-- Study all photos: front shot shows overall condition; tag/label/hang tag photos show exact brand, size, material, and MSRP
-- The MSRP from the hang tag (if visible) is a key pricing anchor — note it prominently
-- The active listings above are CURRENT ASKING prices, not sold data. Use them as a ceiling/positioning signal and the total active count as supply/competition. Note the match level used (exact vs. widened) and say how close the comps really are.
-- If REAL SOLD DATA was pasted, base the recommended price on it first: give the sold price range and average, and if the pasted data includes sold and active counts (e.g. Terapeak's), give sell-through = sold ÷ (sold + active). Never invent sold numbers. for, and say so plainly rather than calling them "comps" or implying they're sold prices.
-- You have a real web_search tool (up to 3 uses) — don't skip this, and don't burn all 3 on one vague search. Spend them deliberately, in this order of priority:
-  1. If a style number, product-line name, or distinctive construction detail (e.g. "snap-front varsity," a named fabric/mill) is visible or identifiable from the photos, search for the brand + that specific detail FIRST — confirming the exact product is worth more than a generic brand search, because it's what makes the MSRP and comps trustworthy rather than a category guess.
-  2. Once you've confirmed the exact product (or if you can't), search for its real current/original MSRP from the brand's own site or a reputable retailer.
-  3. If you have a search left, search site:ebay.com plus the brand/product line to see what real, currently-listed sellers use as keywords/phrasing for this same or a closely matching item — especially useful when the active-listing data above has no close match to this item's specific construction/style.
-  Cite what you actually found; never state a fact you didn't verify as if you looked it up. If a search comes up empty, say so and move to the next priority rather than retrying the same query.
-- Only compare same condition: pre-owned to pre-owned, NWT to NWT
-- Flag extended size scarcity premium (XL+, waist 38+) if applicable
-- If both the active-listing data and web search come up thin, say so explicitly — don't paper over a real data gap with a confident-sounding guess
-
-OUTPUT:
-**Sold Data:** Sold range, average, and sell-through from the pasted sold data — or "none provided; check sold links"
-**Active Competition:** Match level used, total active competing listings, and their asking-price range/median (asking prices, not sold)
-**MSRP:** From hang tag if visible, else from a verified web search result (name the source), else "not found"
-**Recommended BIN:** $X.XX with brief rationale — price endings: new items (NWT, NWOT, new in box, new with imperfections) end in .95; pre-owned items end in .99
-**Best Offer:** Yes (always on; the seller reviews every offer personally — no auto-accept or auto-decline)
-**Suggested accept floor:** $X.XX (guidance for the seller's manual review only)
-**Counter guidance:** What to counter below floor
-**Confidence:** High / Medium / Low
-**Notes:** Scarcity premium, condition flags, or data gaps`,
+Price this item now, following the instructions and output format.`,
+    // Cache breakpoint at the end of the user turn: web search makes the
+    // server re-run the model several times inside one request, and each
+    // run re-reads these photos + data. Cached, those re-reads cost ~10%.
+    cache_control: { type: "ephemeral" as const },
   };
+
 
   let response;
   try {
@@ -194,6 +209,7 @@ OUTPUT:
       tools: webSearchUnavailable
         ? undefined
         : [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+      system: PRICING_SYSTEM,
       messages: [{ role: "user", content: [...imageBlocks, textBlock] }],
     });
   } catch (err) {
@@ -203,6 +219,7 @@ OUTPUT:
       response = await client.messages.create({
         model: "claude-sonnet-5",
         max_tokens: 4000,
+        system: PRICING_SYSTEM,
         messages: [{ role: "user", content: [...imageBlocks, textBlock] }],
       });
     } else {
