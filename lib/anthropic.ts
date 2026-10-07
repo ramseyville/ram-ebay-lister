@@ -101,6 +101,17 @@ export function anthropicAuthError(e: unknown): AnthropicAuthError | null {
       "Your Anthropic API key isn't permitted to use this model (403). Check the key's access in the Anthropic Console.",
       403
     );
+  // A Console-configured spend cap comes back as a 400 "You have reached your
+  // specified API usage limits. You will regain access on <date>" — not a 402 —
+  // so it needs its own match, and the message should say what to actually do.
+  if (/reached your specified api usage limits/i.test(message)) {
+    const regain = message.match(/regain access on ([^."]+)/i)?.[1]?.trim();
+    return new AnthropicAuthError(
+      `Your Anthropic API spend limit has been reached${regain ? ` (access resumes ${regain})` : ""}. ` +
+        `Raise the limit under Settings → Limits in the Anthropic Console to keep listing now.`,
+      402
+    );
+  }
   if (status === 402 || /credit balance|too low|billing|payment|insufficient|quota/i.test(message))
     return new AnthropicAuthError(
       "Your Anthropic account can't cover this request — add credits/billing in the Anthropic Console, then try again.",
