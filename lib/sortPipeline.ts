@@ -9,7 +9,9 @@ import {
 import { labeledContent, toImageBlock, type WireImage } from "@/lib/images";
 
 const GROUP_MODEL = "claude-sonnet-4-6";
-const CHECK_MODEL = "claude-sonnet-4-6";
+// Verify/merge steps are simple yes/no "same item?" checks on two to a few
+// thumbnails — Haiku's size. The harder first-pass grouping stays on Sonnet.
+const CHECK_MODEL = "claude-haiku-4-5-20251001";
 const BATCH_SIZE = 10;
 
 // Concurrency caps — keep parallel bursts gentle so we don't trip Anthropic's
