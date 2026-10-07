@@ -283,6 +283,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Cache the photos along with the system prompt: web search makes the model
+  // re-read them several times inside one request.
+  const cachedImages = (blocks: typeof imageBlocks) =>
+    blocks.map((b, i) => (i === blocks.length - 1 ? { ...b, cache_control: { type: "ephemeral" as const } } : b));
+
   try {
     const profile = await routeProfile(client, imageBlocks, body.profile);
     const systemPrompt = buildProfiledAnalysisPrompt(profile);
@@ -332,7 +337,7 @@ export async function POST(req: NextRequest) {
             {
               role: "user",
               content: [
-                ...imageBlocks,
+                ...cachedImages(imageBlocks),
                 {
                   type: "text",
                   text: userText,
@@ -354,7 +359,7 @@ export async function POST(req: NextRequest) {
             messages: [{
               role: "user",
               content: [
-                ...imageBlocks.slice(0, 3),
+                ...cachedImages(imageBlocks.slice(0, 3)),
                 { type: "text", text: userText },
               ],
             }],

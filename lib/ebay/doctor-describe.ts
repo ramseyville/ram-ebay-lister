@@ -54,7 +54,9 @@ export function describeParams(item: DescribeItem, model: DescribeModel): Anthro
     model: DESCRIBE_MODELS[model].id,
     max_tokens: 2500,
     thinking: { type: "disabled" },
-    system: DESCRIPTION_REWRITE_PROMPT,
+    // Cached for single rewrites and batches alike. Haiku only caches prompts
+    // of 4,096+ tokens, so on Haiku this is a no-op until the prompt grows.
+    system: [{ type: "text", text: DESCRIPTION_REWRITE_PROMPT, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: [...photos, { type: "text", text: `EXISTING LISTING:\n${facts}` }] }],
   };
 }
@@ -75,6 +77,10 @@ export function finishDescription(message: Anthropic.Message, conditionText: str
 
 export function describeCost(usage: Anthropic.Usage, model: DescribeModel, batch = false): number {
   const m = DESCRIBE_MODELS[model];
-  const cost = (usage.input_tokens || 0) * m.input + (usage.output_tokens || 0) * m.output;
+  const cost =
+    (usage.input_tokens || 0) * m.input +
+    (usage.output_tokens || 0) * m.output +
+    (usage.cache_creation_input_tokens || 0) * m.input * 1.25 +
+    (usage.cache_read_input_tokens || 0) * m.input * 0.1;
   return batch ? cost * BATCH_DISCOUNT : cost;
 }

@@ -8,8 +8,10 @@ import {
 } from "@/lib/prompts";
 import { labeledContent, toImageBlock, type WireImage } from "@/lib/images";
 
+// First-pass grouping stays on Sonnet: mis-grouped photos make bad listings.
+// The "same item?" verify/merge checks are simple yes/no calls, so Haiku.
 const GROUP_MODEL = "claude-sonnet-4-6";
-const CHECK_MODEL = "claude-sonnet-4-6";
+const CHECK_MODEL = "claude-haiku-4-5-20251001";
 const BATCH_SIZE = 10;
 
 // Concurrency caps — keep parallel bursts gentle so we don't trip Anthropic's

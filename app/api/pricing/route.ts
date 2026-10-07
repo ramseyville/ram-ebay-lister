@@ -144,26 +144,22 @@ export async function POST(req: NextRequest) {
     source: { type: "base64" as const, media_type: p.mediaType as "image/jpeg" | "image/png" | "image/webp", data: p.data },
   }));
 
-  const textBlock = {
-    type: "text" as const,
-    text: `You are an expert eBay reseller pricing analyst. Analyze the photos and the real eBay listing data to recommend a price.
-
-ITEM:
-${itemSummary}
-
-${comps}
-
-${soldBlock}
+  // The fixed instructions go in a cached system prompt; only the item and
+  // its comps change per request.
+  const system: Anthropic.TextBlockParam[] = [
+    {
+      type: "text",
+      text: `You are an expert eBay reseller pricing analyst. Analyze the photos and the real eBay listing data to recommend a price.
 
 INSTRUCTIONS:
 - Study all photos: front shot shows overall condition; tag/label/hang tag photos show exact brand, size, material, and MSRP
 - The MSRP from the hang tag (if visible) is a key pricing anchor — note it prominently
-- The active listings above are CURRENT ASKING prices, not sold data. Use them as a ceiling/positioning signal and the total active count as supply/competition. Note the match level used (exact vs. widened) and say how close the comps really are.
+- The active listings in the item data are CURRENT ASKING prices, not sold data. Use them as a ceiling/positioning signal and the total active count as supply/competition. Note the match level used (exact vs. widened) and say how close the comps really are.
 - If REAL SOLD DATA was pasted, base the recommended price on it first: give the sold price range and average, and if the pasted data includes sold and active counts (e.g. Terapeak's), give sell-through = sold ÷ (sold + active). Never invent sold numbers. for, and say so plainly rather than calling them "comps" or implying they're sold prices.
 - You have a real web_search tool (up to 3 uses) — don't skip this, and don't burn all 3 on one vague search. Spend them deliberately, in this order of priority:
   1. If a style number, product-line name, or distinctive construction detail (e.g. "snap-front varsity," a named fabric/mill) is visible or identifiable from the photos, search for the brand + that specific detail FIRST — confirming the exact product is worth more than a generic brand search, because it's what makes the MSRP and comps trustworthy rather than a category guess.
   2. Once you've confirmed the exact product (or if you can't), search for its real current/original MSRP from the brand's own site or a reputable retailer.
-  3. If you have a search left, search site:ebay.com plus the brand/product line to see what real, currently-listed sellers use as keywords/phrasing for this same or a closely matching item — especially useful when the active-listing data above has no close match to this item's specific construction/style.
+  3. If you have a search left, search site:ebay.com plus the brand/product line to see what real, currently-listed sellers use as keywords/phrasing for this same or a closely matching item — especially useful when the active-listing data has no close match to this item's specific construction/style.
   Cite what you actually found; never state a fact you didn't verify as if you looked it up. If a search comes up empty, say so and move to the next priority rather than retrying the same query.
 - Only compare same condition: pre-owned to pre-owned, NWT to NWT
 - Flag extended size scarcity premium (XL+, waist 38+) if applicable
@@ -179,6 +175,16 @@ OUTPUT:
 **Counter guidance:** What to counter below floor
 **Confidence:** High / Medium / Low
 **Notes:** Scarcity premium, condition flags, or data gaps`,
+      cache_control: { type: "ephemeral" },
+    },
+  ];
+
+  // Cache the photos and item data too: with web search on, the model runs
+  // several times inside one request, and each re-read is then ~10% price.
+  const textBlock: Anthropic.TextBlockParam = {
+    type: "text",
+    text: `ITEM:\n${itemSummary}\n\n${comps}\n\n${soldBlock}`,
+    cache_control: { type: "ephemeral" },
   };
 
   let response;
@@ -194,6 +200,7 @@ OUTPUT:
       tools: webSearchUnavailable
         ? undefined
         : [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+      system,
       messages: [{ role: "user", content: [...imageBlocks, textBlock] }],
     });
   } catch (err) {
@@ -203,6 +210,7 @@ OUTPUT:
       response = await client.messages.create({
         model: "claude-sonnet-5",
         max_tokens: 4000,
+        system,
         messages: [{ role: "user", content: [...imageBlocks, textBlock] }],
       });
     } else {
