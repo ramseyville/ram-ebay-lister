@@ -336,6 +336,11 @@ export async function POST(req: NextRequest) {
                 {
                   type: "text",
                   text: userText,
+                  // Second cache breakpoint (system prompt is the first):
+                  // with web search on, the server re-runs the model several
+                  // times inside this one request and each run re-reads the
+                  // photos. Cached, those re-reads bill at ~10%.
+                  cache_control: { type: "ephemeral" },
                 },
               ],
             },
@@ -355,7 +360,7 @@ export async function POST(req: NextRequest) {
               role: "user",
               content: [
                 ...imageBlocks.slice(0, 3),
-                { type: "text", text: userText },
+                { type: "text", text: userText, cache_control: { type: "ephemeral" } },
               ],
             }],
           }, callOptions());
