@@ -258,27 +258,44 @@ async function ebayRequest(
   url: string,
   opts: { body?: unknown; extraHeaders?: Record<string, string> } = {}
 ): Promise<EbayResp> {
-  const resp = await fetch(url, {
-    method,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      // Node's fetch defaults Accept-Language to "*", which eBay rejects
-      // (error 25709). Pin it to a valid locale.
-      "Accept-Language": "en-US",
-      ...(opts.extraHeaders || {}),
-    },
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-  });
-  const text = await resp.text();
-  let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    /* non-JSON (e.g. empty 204) */
+  // eBay's Inventory API intermittently answers valid requests with a 500 /
+  // errorId 25001 ("A system error has occurred"). Calls that are safe to
+  // repeat (GET/PUT/DELETE — a PUT of the same body is idempotent) get up to
+  // two retries with a short backoff. POST is deliberately NOT retried here:
+  // creating an offer has its own duplicate-aware retry at its call site, and
+  // publish/withdraw must not be blindly repeated.
+  const idempotent = method === "GET" || method === "PUT" || method === "DELETE";
+  const maxRetries = idempotent ? 2 : 0;
+  let attempt = 0;
+  for (;;) {
+    const resp = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        // Node's fetch defaults Accept-Language to "*", which eBay rejects
+        // (error 25709). Pin it to a valid locale.
+        "Accept-Language": "en-US",
+        ...(opts.extraHeaders || {}),
+      },
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    });
+    const text = await resp.text();
+    let json: any = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      /* non-JSON (e.g. empty 204) */
+    }
+    if (resp.status >= 500 && attempt < maxRetries) {
+      attempt++;
+      console.error(`[ebay] ${method} ${url.split("?")[0]} -> ${resp.status}; retry ${attempt}/${maxRetries}`);
+      await new Promise((res) => setTimeout(res, 1500 * attempt));
+      continue;
+    }
+    return { ok: resp.ok, status: resp.status, json, text };
   }
-  return { ok: resp.ok, status: resp.status, json, text };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
