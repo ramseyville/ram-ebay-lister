@@ -54,7 +54,9 @@ export function describeParams(item: DescribeItem, model: DescribeModel): Anthro
     model: DESCRIBE_MODELS[model].id,
     max_tokens: 2500,
     thinking: { type: "disabled" },
-    system: DESCRIPTION_REWRITE_PROMPT,
+    // Same instructions on every rewrite (live and overnight batch) — cache
+    // them. Ignored by the API if the prompt is under the model's minimum.
+    system: [{ type: "text", text: DESCRIPTION_REWRITE_PROMPT, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: [...photos, { type: "text", text: `EXISTING LISTING:\n${facts}` }] }],
   };
 }
