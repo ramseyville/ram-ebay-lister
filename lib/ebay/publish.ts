@@ -2317,8 +2317,26 @@ export async function publishListing(
     storeFront: { customLabel: sku },
   };
 
-  const postOffer = () =>
+  const rawPostOffer = () =>
     ebayRequest(accessToken, "POST", `${EBAY_INV_BASE}/offer`, { body: offerBody, extraHeaders: CL });
+
+  // eBay intermittently answers offer creation with a 500 / errorId 25001
+  // ("A system error has occurred. Error occurred while reading or persisting
+  // data") even for a valid request. Nothing here retried it, so one blip
+  // failed the whole listing after the inventory item had already saved.
+  // Retry server-side failures a couple of times. If an earlier attempt
+  // actually persisted the offer, the retry comes back as a 400 "offer
+  // already exists", which the existing-offer branch below turns into an
+  // update of that offer — so a retry can't create a duplicate.
+  const postOffer = async () => {
+    let resp = await rawPostOffer();
+    for (let i = 0; i < 2 && (resp.status >= 500 || errorIds(resp).includes(25001)); i++) {
+      console.error(`[publish] ${sku}: offer create hit eBay server error (${resp.status}) — retry ${i + 1}/2`);
+      await new Promise((res) => setTimeout(res, 1500 * (i + 1)));
+      resp = await rawPostOffer();
+    }
+    return resp;
+  };
 
   r = await postOffer();
 
