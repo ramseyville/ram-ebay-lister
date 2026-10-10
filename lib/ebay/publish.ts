@@ -3,6 +3,7 @@
 // with recovery for missing item specifics, rejected conditions, and non-leaf
 // categories.
 
+import { cleanNumericAspects } from "./aspect-number";
 import {
   EBAY_ACC_BASE,
   EBAY_INV_BASE,
@@ -1969,6 +1970,9 @@ export async function publishListing(
       if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
     }
   }
+  // Number-only fields (Fabric Weight…) get a clean number or nothing — a
+  // value like "12-gauge" there fails the whole publish with 25002.
+  cleanNumericAspects(aspects, aspectMeta);
   // The aspects loop stops as soon as aspects succeed, so give a failed
   // condition lookup its own retry — validating the grade against the
   // category's real accepted IDs beats guessing and recovering from 25021.
