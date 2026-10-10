@@ -11,6 +11,7 @@ import { ensureSchema, query } from "@/lib/db";
 import { fitDescription } from "@/lib/description";
 import type { ListingResult } from "@/lib/types";
 import { fillMissingAspects } from "./aspect-fill";
+import { cleanNumericAspects } from "./aspect-number";
 import { EBAY_INV_BASE, EBAY_MARKETPLACE_ID } from "./config";
 import { CONTENT_LANGUAGE, ebayRequest, updateOfferBody } from "./publish";
 import { categoryAspects, type AspectMeta } from "./taxonomy";
@@ -62,7 +63,10 @@ function validateSpecifics(specs: Record<string, string[]>, meta: AspectMeta[]):
 async function finalSpecifics(v: DoctorVersion, current: TradingItem): Promise<Record<string, string[]>> {
   const meta = await categoryAspects(v.categoryId || current.categoryId).catch(() => []);
   const specs = validateSpecifics(v.specifics, meta);
-  if (!meta.length) return specs;
+  if (!meta.length) {
+    cleanNumericAspects(specs, meta);
+    return specs;
+  }
   const listing: ListingResult = {
     title: v.title,
     description: v.description,
@@ -73,7 +77,9 @@ async function finalSpecifics(v: DoctorVersion, current: TradingItem): Promise<R
     condition: current.conditionName,
   };
   await fillMissingAspects(specs, meta, listing, current.pictures);
-  return validateSpecifics(specs, meta);
+  const out = validateSpecifics(specs, meta);
+  cleanNumericAspects(out, meta);
+  return out;
 }
 
 /** The Inventory API offer behind this listing, if the app created it. */
