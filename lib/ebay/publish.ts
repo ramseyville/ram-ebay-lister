@@ -2460,6 +2460,18 @@ async function publishOfferWithRecovery(
   let r = await doPublish();
   if (r.ok) return { success: true, sku, offerId, listingId: r.json?.listingId || "" };
 
+  // Recovery: 25604 "Product not found" (usually HTTP 500) — eBay's publish
+  // step can't see the inventory item saved a moment ago, or a server blip
+  // (25001) hit the publish itself. Re-save the item and retry with a short
+  // wait. Safe to repeat: one offer can only ever become one listing.
+  for (let i = 0; i < 3 && (errorIds(r).includes(25604) || errorIds(r).includes(25001)); i++) {
+    console.error(`[publish] ${sku}: publish hit ${errorIds(r).join(",")} (${r.status}) — re-saving item, retry ${i + 1}/3`);
+    await new Promise((res) => setTimeout(res, 2000 * (i + 1)));
+    await putInventory();
+    r = await doPublish();
+    if (r.ok) return { success: true, sku, offerId, listingId: r.json?.listingId || "" };
+  }
+
   // Recovery: a few categories don't allow Best Offer. Post without it
   // rather than fail the whole listing.
   if (/best\s*offer/i.test(r.text) && ctx.offerBody.listingPolicies?.bestOfferTerms) {
