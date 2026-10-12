@@ -21,7 +21,7 @@ export const APPAREL_CATEGORIES = new Set([
   "womens_top", "womens_dress", "womens_skirt", "womens_pants", "womens_coat",
   "womens_sweater", "womens_jeans", "womens_clothing", "womens_shoes", "mens_top",
   "mens_pants", "mens_coat", "mens_sweater", "mens_jeans", "mens_clothing",
-  "mens_shoes", "scarf", "belt", "hat", "mens_polo", "womens_polo",
+  "mens_shoes", "scarf", "belt", "womens_belt", "hat", "mens_polo", "womens_polo",
   "mens_casual_shirt", "mens_tshirt", "mens_hoodie", "womens_hoodie",
 ]);
 
