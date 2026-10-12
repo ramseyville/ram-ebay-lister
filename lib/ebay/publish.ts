@@ -111,7 +111,11 @@ const CATEGORY_MAP: Record<string, string> = {
   // "/b/Womens-Hoodies-Sweatshirts/155226/").
   mens_hoodie: "155183", womens_hoodie: "155226",
   mens_shoes: "93427", handbag: "169291", wallet: "2996", jewelry: "281",
-  scarf: "45238", belt: "2996", sunglasses: "79720", hat: "52382", mens_tie: "15662",
+  scarf: "45238",
+  // Belts were mapped to 2996 (Men's Wallets), so every belt listed as a
+  // wallet. 2993 = Men's Accessories > Belts; 3003 = Women's Accessories > Belts.
+  belt: "2993", womens_belt: "3003",
+  sunglasses: "79720", hat: "52382", mens_tie: "15662",
   accessory: "4250", doll: "22733", collectible: "1463", collector_plate: "1467",
   toy: "2550", home_decor: "10033", book: "267", knife: "7313",
   sporting_goods: "159044", electronics: "293", camera: "625", audio: "293",
@@ -175,7 +179,7 @@ const ASPECT_CATEGORY_GATES: Record<string, Set<string>> = {
   "Brim Style":   new Set(["hat"]),
   "Bag Closure":  new Set(["handbag", "wallet"]),
   "Strap Type":   new Set(["handbag"]),
-  "Adjustable":   new Set(["handbag", "belt", "hat"]),
+  "Adjustable":   new Set(["handbag", "belt", "womens_belt", "hat"]),
   // Size Type ("Regular," "Big & Tall," "Petite," etc.) only makes sense for
   // genuinely graded clothing — ties, belts, scarves, hats, wallets, and
   // jewelry don't have a size type at all, and eBay's own taxonomy has been
@@ -1834,6 +1838,11 @@ export async function publishListing(
     if (!isWomens && /\b(T-SHIRT|T SHIRT|TSHIRT|TEE)\b/.test(titleUpper)) {
       catKey = "mens_tshirt";
     }
+  }
+  // There's one "belt" category key; a women's belt goes to Women's Belts.
+  if (catKey === "belt") {
+    const hay = `${listing.title || ""} ${listing.item_specifics?.Department || ""}`.toUpperCase();
+    if (/\bWOMEN'?S\b|\bLADIES\b/.test(hay)) catKey = "womens_belt";
   }
   const { categoryId: staticCat, fallbacks } = resolveCategory(
     catKey !== listing.category ? { ...listing, category: catKey } : listing
