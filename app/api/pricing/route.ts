@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardApiRequest } from "@/lib/api-guard";
+import { anthropicAuthError } from "@/lib/anthropic";
 import Anthropic from "@anthropic-ai/sdk";
 import { MIN_COMPS, compLevels } from "@/lib/comps";
 import { categoryIdForKey } from "@/lib/ebay/publish";
@@ -122,7 +123,7 @@ const PRICING_SYSTEM = [
   { type: "text" as const, text: PRICING_INSTRUCTIONS, cache_control: { type: "ephemeral" as const } },
 ];
 
-export async function POST(req: NextRequest) {
+async function handlePricing(req: NextRequest) {
   const denied = guardApiRequest(req);
   if (denied) return denied;
 
@@ -232,5 +233,28 @@ Price this item now, following the instructions and output format.`,
     .map((b) => (b as { type: "text"; text: string }).text)
     .join("\n");
 
+  if (!text.trim()) {
+    // e.g. the model spent its whole budget on searches and never wrote the answer.
+    return NextResponse.json(
+      { ok: false, error: `The pricing model returned no answer (stop reason: ${response.stop_reason ?? "unknown"}). Try again.` },
+      { status: 502 }
+    );
+  }
+
   return NextResponse.json({ ok: true, analysis: text });
+}
+
+// Any throw inside the handler used to escape as a bare 500 with an EMPTY body,
+// which the browser reports as the useless "Unexpected end of JSON input" and
+// hides the real cause (spend limit, timeout, bad upstream response, ...).
+// Always answer with JSON that carries the actual reason.
+export async function POST(req: NextRequest) {
+  try {
+    return await handlePricing(req);
+  } catch (e) {
+    const fatal = anthropicAuthError(e);
+    const msg = fatal ? fatal.message : e instanceof Error ? e.message : String(e);
+    console.error("[pricing] error:", e);
+    return NextResponse.json({ ok: false, error: msg }, { status: fatal ? fatal.status : 500 });
+  }
 }

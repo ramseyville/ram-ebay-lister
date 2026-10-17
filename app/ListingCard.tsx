@@ -157,9 +157,23 @@ export function ListingCard({
         .map((p) => ({ mediaType: p!.mediaType, data: p!.data }));
 
       const res = await apiPost("/api/pricing", { listing, photos, soldNotes });
-      const data = await res.json();
+      // Read as text first: a platform timeout/crash returns an empty or
+      // non-JSON body, and res.json() would throw the opaque "Unexpected end
+      // of JSON input" instead of saying what happened.
+      const raw = await res.text();
+      let data: { ok?: boolean; error?: string; analysis?: string } | null = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        data = null;
+      }
+      if (!data) {
+        throw new Error(
+          `The pricing server sent back an unreadable response (HTTP ${res.status}). It most likely timed out or crashed — try again, and if it repeats, tell me the time it happened.`
+        );
+      }
       if (!data.ok) throw new Error(data.error || "Pricing analysis failed.");
-      setPricingResult(data.analysis);
+      setPricingResult(data.analysis ?? "");
     } catch (e) {
       setPricingError((e as Error).message);
     } finally {
