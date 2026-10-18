@@ -148,11 +148,11 @@ describe("normalizeExtendedSize", () => {
 });
 
 describe("sizeCandidates", () => {
-  it("generates NXL/Big NX/NX candidates for the NXLB family, raw code last", () => {
-    expect(sizeCandidates("3XLB", "mens_top")).toEqual(["3XL", "Big 3X", "3X", "3XLB"]);
+  it("tries Big-specific values before plain NXL for the NXLB family", () => {
+    expect(sizeCandidates("3XLB", "mens_top")).toEqual(["3XLB", "3XB", "Big 3X", "3XL", "3X"]);
   });
   it("strips bilingual notation before generating candidates", () => {
-    expect(sizeCandidates("3XLB/3TGG", "mens_top")).toEqual(["3XL", "Big 3X", "3X", "3XLB"]);
+    expect(sizeCandidates("3XLB/3TGG", "mens_top")).toEqual(["3XLB", "3XB", "Big 3X", "3XL", "3X"]);
   });
   it("generates candidates for bare NX sizes", () => {
     expect(sizeCandidates("5X", "mens_top")).toEqual(["5XL", "Big 5X", "5X"]);
@@ -162,7 +162,8 @@ describe("sizeCandidates", () => {
     expect(sizeCandidates("2XT", "mens_top")).toEqual(["2XLT", "2XT"]);
   });
   it("generates candidates for the NXB (Big, no L) abbreviation", () => {
-    expect(sizeCandidates("4XB", "mens_top")).toEqual(["4XL", "Big 4X", "4X", "4XB"]);
+    expect(sizeCandidates("4XB", "mens_top")).toEqual(["4XB", "4XLB", "Big 4X", "4XL", "4X"]);
+    expect(sizeCandidates("2XB", "mens_top")).toEqual(["2XB", "2XLB", "Big 2X", "2XL", "2X"]);
   });
   it("leaves already-standard tall codes as a single unchanged candidate", () => {
     expect(sizeCandidates("2XLT", "mens_top")).toEqual(["2XLT"]);

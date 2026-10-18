@@ -795,9 +795,19 @@ function reconcileAspects(
         const rawFallback = String(listing.size || "");
         const cleanedRaw = rawFallback.toUpperCase().replace(/[^A-Z0-9]/g, "");
         const fallbackInput = current || (looksLikeSizeCode(cleanedRaw) ? rawFallback : "");
-        for (const c of sizeCandidates(fallbackInput, catKey)) {
-          sizeCandidateMatch = matchAllowed(c, a.values);
-          if (sizeCandidateMatch) break;
+        // Two passes: an EXACT match on any candidate wins before any fuzzy
+        // one. matchAllowed's prefix rule would otherwise turn the first
+        // candidate "3XLB" into plain "3XL" before "Big 3X" was ever tried.
+        const sizeCands = sizeCandidates(fallbackInput, catKey);
+        for (const c of sizeCands) {
+          const exact = a.values.find((v) => v.trim().toLowerCase() === c.trim().toLowerCase());
+          if (exact) { sizeCandidateMatch = exact; break; }
+        }
+        if (!sizeCandidateMatch) {
+          for (const c of sizeCands) {
+            sizeCandidateMatch = matchAllowed(c, a.values);
+            if (sizeCandidateMatch) break;
+          }
         }
       }
       // Same idea for Size Type: which pairing is correct for an XLT-style

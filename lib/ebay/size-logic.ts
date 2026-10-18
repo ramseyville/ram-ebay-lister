@@ -215,7 +215,19 @@ export function sizeCandidates(rawSize: string, catKey: string): string[] {
   // best guess when there's nothing real to check against. The raw brand
   // code ("3XLB") is the least likely of the options to be a real eBay
   // value, so it shouldn't be candidates[0].
-  let m = /^(\d)XLB?$/i.exec(base);
+  // Big-coded sizes ("3XLB", "3XB") try eBay's Big-specific values FIRST —
+  // "3XLB", "3XB", "Big 3X" — and fall back to plain "3XL" only when the
+  // category has no Big-specific value. Plain "3XL" first was the bug:
+  // it always matched, so a Big shirt was listed as a regular 3XL.
+  let m = /^(\d)XLB$/i.exec(base);
+  if (m) {
+    push(`${m[1]}XLB`);
+    push(`${m[1]}XB`);
+    push(`Big ${m[1]}X`);
+    push(`${m[1]}XL`);
+    push(`${m[1]}X`);
+  }
+  m = /^(\d)XL$/i.exec(base);
   if (m) {
     push(`${m[1]}XL`);
     push(`Big ${m[1]}X`);
@@ -234,8 +246,10 @@ export function sizeCandidates(rawSize: string, catKey: string): string[] {
   }
   m = /^(\d)XB$/i.exec(base);
   if (m) {
-    push(`${m[1]}XL`);
+    push(`${m[1]}XB`);
+    push(`${m[1]}XLB`);
     push(`Big ${m[1]}X`);
+    push(`${m[1]}XL`);
     push(`${m[1]}X`);
   }
   push(base);
@@ -251,7 +265,11 @@ export function looksLikeSizeCode(cleaned: string): boolean {
 
 export function sizeAspectValue(rawSize: string, catKey: string): string {
   const candidates = sizeCandidates(rawSize, catKey);
-  const best = candidates[0] || (rawSize || "").trim();
+  // With no eBay list to check against, a Big code's safest blind guess is
+  // the plain "3XL" form (eBay's standardized value), not "3XLB".
+  const isBigCode = /^\dXL?B$/i.test(cleanSizeBase(rawSize));
+  const best =
+    (isBigCode && candidates.find((c) => /^\dXL$/i.test(c))) || candidates[0] || (rawSize || "").trim();
   const cleaned = best.toUpperCase().replace(/[^A-Z0-9]/g, "");
   // Not a real size code (e.g. "Big Man") — don't submit it. Better to
   // leave the field for eBay's own required-field fallback to pick SOME
