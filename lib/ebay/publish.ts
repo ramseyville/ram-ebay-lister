@@ -31,6 +31,7 @@ import {
 } from "@/lib/conditions";
 import type { ListingResult } from "@/lib/types";
 import { cleanSpecificValue, fitDescription, normalizeDescription } from "@/lib/description";
+import { looksLikeCasualButtonShirt } from "@/lib/ebay/shirt-category";
 import { fillMissingAspects } from "./aspect-fill";
 import { cleanTitle, dropLowRetailPrice } from "@/lib/title";
 import { estimateShipping } from "@/lib/shipping";
@@ -1823,7 +1824,17 @@ export async function publishListing(
     const isWomens = /\bWOMEN'?S\b/.test(titleUpper) || /\bWOMEN'?S\b/.test(String(listing.item_specifics?.Department || "").toUpperCase());
     if (
       !isWomens &&
-      /\b(FLANNEL|CHAMOIS|WESTERN SHIRT|CAMP SHIRT|HAWAIIAN SHIRT|CASUAL SHIRT|PLAID SHIRT)\b/.test(titleUpper)
+      (/\b(FLANNEL|CHAMOIS|WESTERN SHIRT|CAMP SHIRT|HAWAIIAN SHIRT|CASUAL SHIRT|PLAID SHIRT)\b/.test(titleUpper) ||
+        // A letter-sized button-front shirt is a casual shirt: dress shirts are
+        // sized by neck/sleeve. Without this, Oxfords, gingham and linen
+        // button-downs all fell into Dress Shirts (and picked up its Neck Size).
+        (catKey === "mens_top" &&
+          looksLikeCasualButtonShirt({
+            title: listing.title,
+            item_type: listing.item_type,
+            size: listing.size,
+            closure: String(listing.item_specifics?.Closure || ""),
+          })))
     ) {
       catKey = "mens_casual_shirt";
     }

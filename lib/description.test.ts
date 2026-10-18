@@ -64,6 +64,20 @@ describe("cleanSpecificValue", () => {
     expect(cleanSpecificValue("Approximately 30")).toBe("30");
     expect(cleanSpecificValue("Wide Leg")).toBe("Wide Leg");
   });
+  it("drops the model's notes-to-self instead of passing them to eBay", () => {
+    expect(cleanSpecificValue("free text entry needed - not specified on tag or in photos")).toBe("");
+    expect(cleanSpecificValue("Not specified")).toBe("");
+    expect(cleanSpecificValue("unknown")).toBe("");
+    expect(cleanSpecificValue("See tag")).toBe("");
+    expect(cleanSpecificValue("N/A")).toBe("");
+    expect(cleanSpecificValue("unable to determine from photos")).toBe("");
+  });
+  it("keeps real values, including ones that contain similar words", () => {
+    expect(cleanSpecificValue("16.5")).toBe("16.5");
+    expect(cleanSpecificValue("Long Sleeve")).toBe("Long Sleeve");
+    expect(cleanSpecificValue("Spread Collar")).toBe("Spread Collar");
+    expect(cleanSpecificValue("Textured")).toBe("Textured");
+  });
 });
 
 describe("no links or citations", () => {

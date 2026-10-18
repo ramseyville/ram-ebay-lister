@@ -12,6 +12,7 @@
 // value against eBay's lists as usual, so a bad pick can't reach eBay.
 
 import { getClient, parseModelJson } from "@/lib/anthropic";
+import { cleanSpecificValue } from "@/lib/description";
 import type { ListingResult } from "@/lib/types";
 import type { AspectMeta } from "./taxonomy";
 
@@ -115,8 +116,10 @@ Rules:
     for (const [name, raw] of Object.entries(picked || {})) {
       const a = allowed.get(name);
       if (!a) continue;
+      // cleanSpecificValue also blanks out the model's notes-to-self such as
+      // "free text entry needed - not specified on tag", which are not values.
       const vals = (Array.isArray(raw) ? raw : [raw])
-        .map((v) => String(v ?? "").trim())
+        .map((v) => cleanSpecificValue(String(v ?? "")))
         .filter(Boolean)
         .slice(0, a.multi ? 6 : 1);
       if (!vals.length) continue;

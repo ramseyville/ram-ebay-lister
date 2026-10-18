@@ -20,10 +20,23 @@ const SIGN_OFF_HTML = `<p><em>${STORE_SIGN_OFF}</em></p>`;
  * ("27 in"), not hedges like "approx. 27 in" or "~27 in".
  */
 export function cleanSpecificValue(value: string): string {
-  return (value || "")
+  const cleaned = (value || "")
     .replace(/\(?\bapprox(?:imately)?\b\.?\)?:?|~/gi, "")
     .replace(/\s+/g, " ")
     .trim();
+  return isCommentary(cleaned) ? "" : cleaned;
+}
+
+// The model sometimes writes a note to itself into a field it couldn't fill
+// ("free text entry needed - not specified on tag or in photos") instead of
+// leaving it out. That is never a real value, and if it reaches eBay it shows
+// up on the live listing (it did, as a dress shirt's Neck Size). Treat any such
+// note as "no value" so the field stays blank.
+const COMMENTARY =
+  /free[\s-]?text|entry needed|not\s+(?:specified|visible|stated|listed|shown|provided|available|applicable|determinable|legible|indicated|marked|on (?:the )?tag)|\bunspecified\b|\bunknown\b|\bn\/a\b|\bsee\s+(?:tag|photos?|pictures?|description|listing)\b|\bcheck\s+(?:tag|photos?)\b|\b(?:unable|cannot|can't)\s+(?:to\s+)?(?:determine|see|read|verify)\b|\bneeds?\s+(?:to be\s+)?(?:entered|filled|verified|confirmed)\b|\bto be determined\b|\btbd\b/i;
+
+export function isCommentary(value: string): boolean {
+  return COMMENTARY.test(value || "");
 }
 
 // eBay's Inventory API rejects product.description over 4000 characters
