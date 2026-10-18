@@ -4,6 +4,8 @@ import { isLetterSize, looksLikeCasualButtonShirt } from "./shirt-category";
 describe("isLetterSize", () => {
   it("recognises letter sizes and not neck/sleeve sizing", () => {
     for (const s of ["M", "L", "XL", "2XL", "XXL", "Large", "X-Large", "s"]) expect(isLetterSize(s)).toBe(true);
+    // Big & Tall letter codes are letter sizes too (seen live: 2XT, 3XB).
+    for (const s of ["LT", "XLT", "2XLT", "2XT", "3XT", "3XB", "4XB", "3XLB"]) expect(isLetterSize(s)).toBe(true);
     for (const s of ["16", "16.5", "15 1/2", "17 34/35", "", undefined]) expect(isLetterSize(s as any)).toBe(false);
   });
 });

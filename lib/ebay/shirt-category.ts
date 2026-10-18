@@ -12,7 +12,7 @@
 // are letter-sized — "M", "XL", "2XL".
 
 const LETTER_SIZE =
-  /^(?:XXS|XS|S|M|L|XL|XXL|XXXL|[2-6]XL|[2-6]X|X-?SMALL|SMALL|MEDIUM|LARGE|X-?LARGE|XX-?LARGE|XXX-?LARGE)$/i;
+  /^(?:XXS|XS|S|M|L|XL|XXL|XXXL|[2-6]XL|[2-6]X|X-?SMALL|SMALL|MEDIUM|LARGE|X-?LARGE|XX-?LARGE|XXX-?LARGE|[SML]T|X+LT|[2-6]XLT|[2-6]XT|[2-6]XB|[2-6]XLB|X+LB)$/i;
 
 // Words that say "a button-front shirt" (so a letter-sized henley, tank or
 // thermal isn't swept in).

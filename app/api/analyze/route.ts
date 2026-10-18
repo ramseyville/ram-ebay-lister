@@ -112,6 +112,47 @@ async function routeProfile(
   }
 }
 
+// Backstop for a blank size on clothing. The main writer has left Size empty
+// on compact Big & Tall tags ("2XT", "3XB") it wasn't sure how to split; the
+// tag was perfectly legible. When that happens, ask a cheap model to read
+// only the size off the tag photos. Never throws — a miss just leaves it blank.
+const SIZED_CATEGORY = /^(mens|womens)_(?!tie$)/;
+async function recoverMissingSize(
+  client: Anthropic,
+  imageBlocks: ImageBlock[],
+  listing: ListingResult
+): Promise<void> {
+  if (String(listing.size || "").trim()) return;
+  if (!SIZED_CATEGORY.test(String(listing.category || ""))) return;
+  try {
+    const resp = await client.messages.create({
+      model: REPAIR_MODEL,
+      max_tokens: 100,
+      messages: [
+        {
+          role: "user",
+          content: [
+            ...imageBlocks,
+            {
+              type: "text",
+              text:
+                'Read the clothing SIZE printed on the size tag or neck label in these photos. ' +
+                'Copy the size token exactly as printed — e.g. "L", "XL", "2XT", "3XB", "XLT", "16.5 34/35", "34x32", "1X", "14W". ' +
+                'If no size is printed anywhere, use "". Reply with JSON only: {"size": "..."}',
+            },
+          ],
+        },
+      ],
+    });
+    const data = parseModelJson<{ size?: string }>(firstText(resp));
+    const size = String(data?.size || "").trim();
+    if (size && size.length <= 20 && /\d|^(X{0,4}[SL]|M|OS|O\/S)/i.test(size)) listing.size = size;
+  } catch (e) {
+    const fatal = anthropicAuthError(e);
+    if (fatal) throw fatal;
+  }
+}
+
 function firstText(resp: Anthropic.Message): string {
   const block = resp.content.find((b) => b.type === "text");
   return block && block.type === "text" ? block.text.trim() : "";
@@ -374,6 +415,14 @@ export async function POST(req: NextRequest) {
           for (const [k, v] of Object.entries(specifics)) {
             if (typeof v === "string") specifics[k] = cleanSpecificValue(v);
           }
+        }
+        const hadSize = Boolean(String(listing.size || "").trim());
+        await recoverMissingSize(client, imageBlocks, listing);
+        // A recovered size never made it into the title — add it when it fits.
+        if (!hadSize && listing.size && listing.title) {
+          const sizeRe = new RegExp(`\\b${listing.size.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+          const withSize = `${listing.title.trim()} ${listing.size}`;
+          if (!sizeRe.test(listing.title) && withSize.length <= 80) listing.title = withSize;
         }
         await repairTitleLength(client, listing);
         // Deterministic backstop: the prompt instructs "Navy Blue" over
