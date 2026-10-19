@@ -722,7 +722,7 @@ function reconcileAspects(
   for (const a of meta) {
     if (!a.name) continue;
     let current = aspects[a.name]?.[0];
-    if (a.name === "Size" && current) current = sizeAspectValue(current, catKey);
+    if (a.name === "Size" && current && !/^\s*\dXL?B\s*$/i.test(current)) current = sizeAspectValue(current, catKey);
     const mustFill = a.required || (isPants && ALWAYS_FILL_FOR_PANTS.has(a.name));
 
     // Category gate: if this aspect has a gate and the current category isn't

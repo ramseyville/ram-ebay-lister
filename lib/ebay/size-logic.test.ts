@@ -149,10 +149,10 @@ describe("normalizeExtendedSize", () => {
 
 describe("sizeCandidates", () => {
   it("tries Big-specific values before plain NXL for the NXLB family", () => {
-    expect(sizeCandidates("3XLB", "mens_top")).toEqual(["3XLB", "3XB", "Big 3X", "3XL", "3X"]);
+    expect(sizeCandidates("3XLB", "mens_top")).toEqual(["BIG 3X", "3XLB", "3XB", "3XL", "3X"]);
   });
   it("strips bilingual notation before generating candidates", () => {
-    expect(sizeCandidates("3XLB/3TGG", "mens_top")).toEqual(["3XLB", "3XB", "Big 3X", "3XL", "3X"]);
+    expect(sizeCandidates("3XLB/3TGG", "mens_top")).toEqual(["BIG 3X", "3XLB", "3XB", "3XL", "3X"]);
   });
   it("generates candidates for bare NX sizes", () => {
     expect(sizeCandidates("5X", "mens_top")).toEqual(["5XL", "Big 5X", "5X"]);
@@ -162,8 +162,8 @@ describe("sizeCandidates", () => {
     expect(sizeCandidates("2XT", "mens_top")).toEqual(["2XLT", "2XT"]);
   });
   it("generates candidates for the NXB (Big, no L) abbreviation", () => {
-    expect(sizeCandidates("4XB", "mens_top")).toEqual(["4XB", "4XLB", "Big 4X", "4XL", "4X"]);
-    expect(sizeCandidates("2XB", "mens_top")).toEqual(["2XB", "2XLB", "Big 2X", "2XL", "2X"]);
+    expect(sizeCandidates("4XB", "mens_top")).toEqual(["BIG 4X", "4XB", "4XLB", "4XL", "4X"]);
+    expect(sizeCandidates("2XB", "mens_top")).toEqual(["BIG 2X", "2XB", "2XLB", "2XL", "2X"]);
   });
   it("leaves already-standard tall codes as a single unchanged candidate", () => {
     expect(sizeCandidates("2XLT", "mens_top")).toEqual(["2XLT"]);
@@ -212,7 +212,7 @@ describe("sizeAspectValue", () => {
     expect(sizeAspectValue("Big Man", "mens_top")).toBe("");
   });
   it("returns the best real candidate for standard cases", () => {
-    expect(sizeAspectValue("3XLB", "mens_top")).toBe("3XL");
+    expect(sizeAspectValue("3XLB", "mens_top")).toBe("BIG 3X");
     expect(sizeAspectValue("L", "mens_top")).toBe("L");
   });
   it("extracts the waist number for pants regardless of category classification", () => {
@@ -281,5 +281,14 @@ describe("Size / Size Type pairing (eBay valueConstraints)", () => {
     expect(sizeTypeFallbacks("34", "womens_jeans")).toEqual(["Regular", "Plus", "Petites"]);
     expect(sizeTypeFallbacks("XLT", "mens_top")).toEqual(["Tall", "Big & Tall", "Regular"]);
     expect(sizeTypeFallbacks("M", "mens_top")).toEqual(["Regular", "Big & Tall", "Tall"]);
+  });
+});
+
+describe("Big codes enter as BIG nX", () => {
+  it("2XB / 3XLB become BIG 2X / BIG 3X, not plain XL", () => {
+    expect(sizeAspectValue("2XB", "mens_casual_shirt")).toBe("BIG 2X");
+    expect(sizeAspectValue("3XLB", "mens_top")).toBe("BIG 3X");
+    expect(sizeCandidates("2XB", "mens_top")[0]).toBe("BIG 2X");
+    expect(sizeCandidates("2XB", "mens_top")).toContain("2XL");
   });
 });
