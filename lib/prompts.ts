@@ -110,7 +110,7 @@ Study each photo carefully:
   - FRONT TYPE (pants/trousers/chinos/jeans only): Look at the front of the pants. Flat Front | Pleated
   - POCKET STYLE: Observe the pockets. No Pockets | Welt | Patch | Slash | Cargo | Zip | On Seam
   - HOOD: Is there a hood? Yes - Fixed | Yes - Removable | No Hood
-  - FIT: Judge from the overall silhouette. Regular | Slim | Relaxed | Athletic Fit | Classic Fit | Modern Fit | Oversized
+  - FIT: Regular | Slim | Relaxed | Athletic Fit | Classic Fit | Modern Fit | Oversized. SLIM / SKINNY / ATHLETIC / RELAXED (any named cut) ONLY when the tag, label, hangtag or product name literally says so — NEVER infer a cut from how the garment looks, and never put "Slim" in the title, Fit, Size Type or Leg Style on appearance alone. If no cut is labeled, leave Fit empty (or Regular only for plain regular-fit items) rather than guess.
   These are observable facts from photos — make a determination even if not 100% certain. Only use the exact values listed above.
 • DENIM/JEANS DETECTION OVERRIDE: Before classifying any bottom as "Pants" or "Trousers," check for denim construction cues: 5-pocket layout, rivets at pocket corners, contrast or chain stitching, selvedge edges, back yoke seam, or a metal button fly. If ANY of these are present, classify Item Type as "Jeans" — never "Pants" or "Trousers" — regardless of wash or color, including white, bleached, or colored denim. Fabric Type for these items is "Denim."
 • BRAND TAG DOMAIN SIGNAL: If a hang tag, label, or care tag shows a website domain (e.g. "agjeans.com", "levi.com"), extract the brand from the domain name and treat it as a hard signal, overriding guesses from logo styling alone. A domain containing "jean" additionally confirms Item Type = Jeans.
