@@ -157,6 +157,7 @@ ORDER — non-negotiable: Brand, then Model/Product Line, then Item Type, then d
    second, conflicting item-type phrase from the list to pad length.
 
 4. KEY DESCRIPTORS in order of search volume:
+   - NO MYSTERY WORDS: never put a word in the title that a buyer would not type into eBay search for this item. A colorway/wash/season code or place-type name from the tag or hangtag ("Egypt," "Montauk," "Slate Rain") is NOT a keyword — leave it in the Color/Wash item specific and the description, not the title — unless it is a real, widely searched product-line or model name. To reach 77-80 characters, use real search terms instead: fabric/tech ("Stretch," "Cotton," "Selvedge"), construction ("5 Pocket," "Flat Front"), cut that is LABELED on the tag, rise, closure, or occasion — never a random proper noun.
    - Gender: "Mens" (never "Men's" or "Men")
    - Color: every title needs a PLAIN color word buyers search for (Black, White, Gray, Blue, Red, Green, Tan, Brown, Pink, Purple…). A brand color name ("Dark Seas," "Blue Nights") is fine to keep only if a plain color word is also present. Use the most-searched color term. Specifically: "Navy" alone is NEVER acceptable in a title —
      always write "Navy Blue" (both words together). "Blue" alone gets meaningfully more search
