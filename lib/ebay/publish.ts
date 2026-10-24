@@ -100,6 +100,9 @@ const CATEGORY_MAP: Record<string, string> = {
   // Confirmed via multiple consistent live eBay Men's T-Shirts browse URLs
   // — another category mens_top was silently swallowing into Dress Shirts.
   mens_tshirt: "15687",
+  // Men's Activewear Tops — base layers / thermals (Smartwool, Under Armour
+  // ColdGear…). Previously filed under Dress Shirts via mens_top.
+  mens_activewear_top: "185099",
   // Confirmed via multiple live eBay listing URLs — polos are a
   // dedicated, separate category from Dress Shirts, with their own Size
   // Type taxonomy. This mismatch (mens_top defaulting to Dress Shirts)
@@ -1847,6 +1850,17 @@ export async function publishListing(
           })))
     ) {
       catKey = "mens_casual_shirt";
+    }
+  }
+  // Base layers / thermals and wool sweaters were landing in Dress Shirts
+  // (mens_top) with its Neck Size field. Route by title keyword.
+  if (POLO_MISCLASSIFY_TARGETS.has(catKey) || catKey === "mens_top" || catKey === "mens_casual_shirt") {
+    const titleUpper = String(listing.title || "").toUpperCase();
+    const hay = `${titleUpper} ${String(listing.item_type || "").toUpperCase()}`;
+    const isWomens = /\bWOMEN'?S\b/.test(titleUpper) || /\bWOMEN'?S\b/.test(String(listing.item_specifics?.Department || "").toUpperCase());
+    if (!isWomens) {
+      if (/\b(BASE[\s-]?LAYER|THERMAL|LONG UNDERWEAR|COMPRESSION)\b/.test(hay)) catKey = "mens_activewear_top";
+      else if (/\b(SWEATER|CARDIGAN|KNITWEAR|PULLOVER KNIT)\b/.test(hay)) catKey = "mens_sweater";
     }
   }
   // T-shirts are also their own eBay category, separate from Dress Shirts
