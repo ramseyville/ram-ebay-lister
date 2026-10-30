@@ -94,7 +94,8 @@ async function routeProfile(
         {
           role: "user",
           content: [
-            ...imageBlocks,
+            // Two photos are plenty to tell apparel from hard goods.
+            ...imageBlocks.slice(0, 2),
             { type: "text", text: PROFILE_ROUTER_PROMPT },
           ],
         },
@@ -406,6 +407,11 @@ export async function POST(req: NextRequest) {
             }],
           }, callOptions());
         }
+        // Cost visibility: one log line per listing (Vercel logs) with token use.
+        const u = finalResp.usage as any;
+        console.error(
+          `[analyze] usage in=${u?.input_tokens} cache_read=${u?.cache_read_input_tokens ?? 0} cache_write=${u?.cache_creation_input_tokens ?? 0} out=${u?.output_tokens} searches=${u?.server_tool_use?.web_search_requests ?? 0} photos=${imageBlocks.length} attempt=${attempt + 1}`
+        );
         const rawText = lastText(finalResp);
         const listing = parseModelJson<ListingResult>(rawText);
         listing.item_profile = profile;
