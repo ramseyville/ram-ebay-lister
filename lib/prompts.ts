@@ -51,7 +51,9 @@ Choose the single best item profile:
 - collectibles: toys, dolls, figurines, trading cards, coins, stamps, ephemera, memorabilia, holiday collectibles
 
 Return ONLY valid JSON:
-{"profile": "clothing|hard_goods|art|media|collectibles", "reason": "short reason"}`;
+{"profile": "clothing|hard_goods|art|media|collectibles", "reason": "short reason", "brand": "brand name exactly as printed, or empty if not legible", "tag_price": number or null}
+
+"tag_price" is the original retail price printed on a price tag/sticker/hangtag (e.g. 98.50 for "$98.50"), or null if no price is visible. Never estimate it.`;
 
 export const PROFILE_PROMPT_ADDONS: Record<string, string> = {
   clothing: `\n\nPROFILE: CLOTHING / SHOES / ACCESSORIES
