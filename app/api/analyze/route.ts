@@ -62,8 +62,8 @@ function isWebSearchDisabledError(e: unknown): boolean {
 // Capped at 2 (was 4) for the initial rollout — each search is a real,
 // serial round trip, so this bounds the worst-case added latency while we
 // confirm the speed trade-off is acceptable before raising it back up.
-function searchTools(): Anthropic.Messages.ToolUnion[] {
-  return webSearchUnavailable
+function searchTools(wanted = true): Anthropic.Messages.ToolUnion[] {
+  return webSearchUnavailable || !wanted
     ? []
     : [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }];
 }
@@ -78,13 +78,32 @@ function toImageBlocks(images: AnalyzeRequestBody["images"]): ImageBlock[] {
 }
 
 // Mirrors route_item_profile(): honor a forced profile, else ask the model.
+type RouteResult = { profile: string; brand: string; tagPrice: number | null; styleOnTag: boolean };
+
+// High-value brands always get a web search, whatever the tag price.
+const HIGH_VALUE_BRANDS =
+  /polo|ralph lauren|rlx|tommy bahama|faherty|hugo boss|\bboss\b|armani|neiman|lacoste|psycho bunny|peter millar|burberry|zegna|pendleton|eileen fisher|orvis|cashmere|rhone|johnnie[\s-]?o|southern tide|travis\s?mathew|cremieux|brooks brothers|bonobos|vineyard vines|patagonia|arc'?teryx|canada goose|barbour|ferragamo|gucci|prada|versace|ermenegildo|brunello|loro piana|kiton|canali|hickey|robert talbott|coach|filson|orvis/i;
+const SEARCH_PRICE_FLOOR = 65;
+
+// Skip the (slow, costly) web search only when we KNOW it adds little: a
+// readable tag price at or under $65, a brand that isn't high-value, AND a
+// tag that already shows a specific style/product name. A thin tag (brand and
+// size only) still gets the search so the keywords stay specific. Unknown
+// brand or unknown price keeps the search too.
+function shouldSearch(r: RouteResult): boolean {
+  if (HIGH_VALUE_BRANDS.test(r.brand)) return true;
+  if (r.tagPrice == null) return true;
+  if (r.tagPrice > SEARCH_PRICE_FLOOR) return true;
+  return !r.styleOnTag;
+}
+
 async function routeProfile(
   client: Anthropic,
   imageBlocks: ImageBlock[],
   requested: string
-): Promise<string> {
+): Promise<RouteResult> {
   const forced = normalizeItemProfile(requested);
-  if (forced !== "auto") return forced;
+  if (forced !== "auto") return { profile: forced, brand: "", tagPrice: null, styleOnTag: false };
 
   try {
     const resp = await client.messages.create({
@@ -104,12 +123,18 @@ async function routeProfile(
     const text = firstText(resp);
     const data = parseModelJson<{ profile?: string }>(text);
     const routed = normalizeItemProfile(data?.profile ?? "auto");
-    return routed !== "auto" ? routed : "hard_goods";
+    const price = Number((data as any)?.tag_price);
+    return {
+      profile: routed !== "auto" ? routed : "hard_goods",
+      brand: String((data as any)?.brand || ""),
+      tagPrice: Number.isFinite(price) && price > 0 ? price : null,
+      styleOnTag: (data as any)?.style_name_on_tag === true,
+    };
   } catch (e) {
     // Auth/billing failures must surface, not silently fall back to a profile.
     const fatal = anthropicAuthError(e);
     if (fatal) throw fatal;
-    return "hard_goods";
+    return { profile: "hard_goods", brand: "", tagPrice: null, styleOnTag: false };
   }
 }
 
@@ -326,7 +351,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const profile = await routeProfile(client, imageBlocks, body.profile);
+    const route = await routeProfile(client, imageBlocks, body.profile);
+    const profile = route.profile;
+    const wantSearch = shouldSearch(route);
+    if (!wantSearch) console.error(`[analyze] skipping web search: brand="${route.brand}" tag_price=${route.tagPrice} style_on_tag=${route.styleOnTag}`);
     const systemPrompt = buildProfiledAnalysisPrompt(profile);
 
     // Vercel kills this function at maxDuration (300s). With web search on,
@@ -360,7 +388,7 @@ export async function POST(req: NextRequest) {
           // Bounded to a handful of uses per item to keep cost and latency
           // in check — this isn't meant to research exhaustively, just to
           // verify the specific, nameable product the photos show.
-          tools: searchTools(),
+          tools: searchTools(wantSearch),
           // System prompt is large and identical across requests for the same
           // profile — cache it to cut cost and latency.
           system: [
@@ -396,7 +424,7 @@ export async function POST(req: NextRequest) {
           finalResp = await client.messages.create({
             model: ANALYSIS_MODEL,
             max_tokens: ANALYSIS_MAX_TOKENS,
-            tools: searchTools(),
+            tools: searchTools(wantSearch),
             system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
             messages: [{
               role: "user",
