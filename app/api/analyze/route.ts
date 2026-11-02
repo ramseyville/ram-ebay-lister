@@ -78,20 +78,23 @@ function toImageBlocks(images: AnalyzeRequestBody["images"]): ImageBlock[] {
 }
 
 // Mirrors route_item_profile(): honor a forced profile, else ask the model.
-type RouteResult = { profile: string; brand: string; tagPrice: number | null };
+type RouteResult = { profile: string; brand: string; tagPrice: number | null; styleOnTag: boolean };
 
 // High-value brands always get a web search, whatever the tag price.
 const HIGH_VALUE_BRANDS =
   /polo|ralph lauren|rlx|tommy bahama|faherty|hugo boss|\bboss\b|armani|neiman|lacoste|psycho bunny|peter millar|burberry|zegna|pendleton|eileen fisher|orvis|cashmere|rhone|johnnie[\s-]?o|southern tide|travis\s?mathew|cremieux|brooks brothers|bonobos|vineyard vines|patagonia|arc'?teryx|canada goose|barbour|ferragamo|gucci|prada|versace|ermenegildo|brunello|loro piana|kiton|canali|hickey|robert talbott|coach|filson|orvis/i;
 const SEARCH_PRICE_FLOOR = 65;
 
-// Skip the (slow, costly) web search only when we KNOW the item is a low-value
-// one: a readable tag price at or under $65 on a brand that isn't high-value.
-// Unknown brand or unknown price keeps the search.
+// Skip the (slow, costly) web search only when we KNOW it adds little: a
+// readable tag price at or under $65, a brand that isn't high-value, AND a
+// tag that already shows a specific style/product name. A thin tag (brand and
+// size only) still gets the search so the keywords stay specific. Unknown
+// brand or unknown price keeps the search too.
 function shouldSearch(r: RouteResult): boolean {
   if (HIGH_VALUE_BRANDS.test(r.brand)) return true;
   if (r.tagPrice == null) return true;
-  return r.tagPrice > SEARCH_PRICE_FLOOR;
+  if (r.tagPrice > SEARCH_PRICE_FLOOR) return true;
+  return !r.styleOnTag;
 }
 
 async function routeProfile(
@@ -100,7 +103,7 @@ async function routeProfile(
   requested: string
 ): Promise<RouteResult> {
   const forced = normalizeItemProfile(requested);
-  if (forced !== "auto") return { profile: forced, brand: "", tagPrice: null };
+  if (forced !== "auto") return { profile: forced, brand: "", tagPrice: null, styleOnTag: false };
 
   try {
     const resp = await client.messages.create({
@@ -125,12 +128,13 @@ async function routeProfile(
       profile: routed !== "auto" ? routed : "hard_goods",
       brand: String((data as any)?.brand || ""),
       tagPrice: Number.isFinite(price) && price > 0 ? price : null,
+      styleOnTag: (data as any)?.style_name_on_tag === true,
     };
   } catch (e) {
     // Auth/billing failures must surface, not silently fall back to a profile.
     const fatal = anthropicAuthError(e);
     if (fatal) throw fatal;
-    return { profile: "hard_goods", brand: "", tagPrice: null };
+    return { profile: "hard_goods", brand: "", tagPrice: null, styleOnTag: false };
   }
 }
 
@@ -350,7 +354,7 @@ export async function POST(req: NextRequest) {
     const route = await routeProfile(client, imageBlocks, body.profile);
     const profile = route.profile;
     const wantSearch = shouldSearch(route);
-    if (!wantSearch) console.error(`[analyze] skipping web search: brand="${route.brand}" tag_price=${route.tagPrice}`);
+    if (!wantSearch) console.error(`[analyze] skipping web search: brand="${route.brand}" tag_price=${route.tagPrice} style_on_tag=${route.styleOnTag}`);
     const systemPrompt = buildProfiledAnalysisPrompt(profile);
 
     // Vercel kills this function at maxDuration (300s). With web search on,
