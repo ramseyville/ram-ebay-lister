@@ -65,7 +65,7 @@ function isWebSearchDisabledError(e: unknown): boolean {
 function searchTools(): Anthropic.Messages.ToolUnion[] {
   return webSearchUnavailable
     ? []
-    : [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }];
+    : [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }];
 }
 
 function toImageBlocks(images: AnalyzeRequestBody["images"]): ImageBlock[] {
