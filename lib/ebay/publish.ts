@@ -1901,8 +1901,16 @@ export async function publishListing(
   // (body wash, skincare, vitamins...), so no single static ID can ever be
   // trusted the way a specific classification like "mens_sweater" can.
   // Always let the live per-item suggester find the right one.
+  // Shoes are excluded too: 93427 / 3034 are the Men's / Women's SHOES PARENT
+  // categories, not leaves, so eBay returns no item-specifics for them (which
+  // made size verification fail on every pair of boots). The suggester finds
+  // the real leaf (Boots, Sneakers, Loafers…) from the title.
   const hasSpecificMapping =
-    catKey !== "other" && catKey !== "health_beauty" && Boolean(CATEGORY_MAP[catKey]);
+    catKey !== "other" &&
+    catKey !== "health_beauty" &&
+    catKey !== "mens_shoes" &&
+    catKey !== "womens_shoes" &&
+    Boolean(CATEGORY_MAP[catKey]);
   const leaf = hasSpecificMapping
     ? null
     : await suggestLeafCategory(`${listing.category_hint || ""} ${listing.title || ""}`);
@@ -1993,6 +2001,7 @@ export async function publishListing(
   let condPolicy: ConditionPolicy | null = null;
   let aspectMeta: AspectMeta[] = [];
   let metaOk = false;
+  let metaErr = "";
   for (let attempt = 0; attempt < 2 && !metaOk; attempt++) {
     try {
       const [meta, policy]: [AspectMeta[], ConditionPolicy | null] = await Promise.all([
@@ -2010,7 +2019,10 @@ export async function publishListing(
         metaOk = true;
       }
       condPolicy = policy;
-    } catch {
+      if (!meta.length) metaErr = `eBay returned no item specifics for category ${catId}`;
+    } catch (e) {
+      metaErr = e instanceof Error ? e.message : String(e);
+      console.error(`[publish] aspects lookup failed (category ${catId}):`, e);
       if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
     }
   }
@@ -2030,7 +2042,8 @@ export async function publishListing(
         "Could not verify this item's Size against eBay's current taxonomy after two attempts " +
         "(eBay's metadata service may be briefly unavailable). Publishing was stopped rather than " +
         "risk submitting an unverified size — eBay now blocks or hides apparel/footwear listings " +
-        "with non-standard size values. Please try posting again in a moment.",
+        "with non-standard size values. Please try posting again in a moment." +
+        (metaErr ? ` (Detail: ${metaErr.slice(0, 200)})` : ""),
     };
   }
   // Guarantee Size Type is set for size-enforced categories even if it's
