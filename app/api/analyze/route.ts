@@ -1,3 +1,4 @@
+import { fixNeckSizedShirt } from "@/lib/ebay/shirt-category";
 import { NextRequest, NextResponse } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getClient, parseModelJson, AnthropicAuthError, anthropicAuthError } from "@/lib/anthropic";
@@ -452,6 +453,8 @@ export async function POST(req: NextRequest) {
         }
         const hadSize = Boolean(String(listing.size || "").trim());
         await recoverMissingSize(client, imageBlocks, listing);
+        // Neck-sized tag = dress shirt; never let a "Polo" label stand.
+        if (fixNeckSizedShirt(listing as any)) console.error("[analyze] corrected neck-sized shirt from polo to dress shirt");
         // A recovered size never made it into the title — add it when it fits.
         if (!hadSize && listing.size && listing.title) {
           const sizeRe = new RegExp(`\\b${listing.size.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");

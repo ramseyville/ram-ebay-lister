@@ -30,3 +30,20 @@ describe("looksLikeCasualButtonShirt", () => {
     expect(looksLikeCasualButtonShirt({ title: "Patagonia Mens Linen Shirt Medium", size: "M", closure: "Button" })).toBe(true);
   });
 });
+
+import { fixNeckSizedShirt } from "./shirt-category";
+describe("fixNeckSizedShirt", () => {
+  it("turns a neck-sized 'polo' into a dress shirt", () => {
+    const l: any = { title: "Psycho Bunny Grover Long Sleeve Polo Shirt Mens Lavender 16.5 34/35 NWT", size: "16.5 34/35", item_type: "Polo Shirt", category: "mens_polo" };
+    expect(fixNeckSizedShirt(l)).toBe(true);
+    expect(l.category).toBe("mens_top");
+    expect(l.item_type).toBe("Dress Shirt");
+    expect(l.title).toContain("Long Sleeve Dress Shirt");
+    expect(l.title).not.toMatch(/polo/i);
+  });
+  it("leaves letter-sized polos alone", () => {
+    const l: any = { title: "Polo Ralph Lauren Polo Shirt Mens Blue L", size: "L", item_type: "Polo Shirt", category: "mens_polo" };
+    expect(fixNeckSizedShirt(l)).toBe(false);
+    expect(l.category).toBe("mens_polo");
+  });
+});
