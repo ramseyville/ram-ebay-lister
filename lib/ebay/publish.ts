@@ -507,7 +507,7 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
   // since 3XL/4XLT genuinely start with a digit too, and this shirt-
   // specific parsing was never meant to apply to them at all.
   const shirtMatch = isShirtCat
-    ? /^(\d{1,2})(?![A-Za-z])(\.5)?\s*(?:(1\/2)\s*)?[-–]?\s*(\d{2}\/\d{2})?/.exec(rawSizeForShirt)
+    ? /^(\d{1,2})(?![A-Za-z])(\.5)?\s*(?:(1\/2)\s*)?[-–]?\s*(\d{2}(?:\/\d{2})?)?/.exec(rawSizeForShirt)
     : null;
   if (shirtMatch) {
     const neck = shirtMatch[2] || shirtMatch[3] ? `${shirtMatch[1]}.5` : shirtMatch[1];
