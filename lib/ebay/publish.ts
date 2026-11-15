@@ -810,7 +810,12 @@ function reconcileAspects(
         const cleanedRaw = rawFallback.toUpperCase().replace(/[^A-Z0-9]/g, "");
         // Dress shirts: start from the full tag size so a neck range
         // ("16/16.5 34/35") tries every neck+sleeve combination.
-        const dressRaw = dressShirtCandidates(rawFallback).length ? rawFallback : "";
+        let dressRaw = dressShirtCandidates(rawFallback).length ? rawFallback : "";
+        // Bare neck ("16.5") plus a sleeve the model put in Sleeve Length.
+        if (!dressRaw && catKey === "mens_top" && /^1[3-9](?:\.5)?$/.test(rawFallback.trim())) {
+          const sl = String(listing.item_specifics?.["Sleeve Length"] || aspects["Sleeve Length"]?.[0] || "").match(/\d{2}(?:\s*\/\s*\d{2})?/)?.[0];
+          if (sl) dressRaw = `${rawFallback.trim()} ${sl.replace(/\s+/g, "")}`;
+        }
         const fallbackInput = dressRaw || current || (looksLikeSizeCode(cleanedRaw) ? rawFallback : "");
         // Two passes: an EXACT match on any candidate wins before any fuzzy
         // one. matchAllowed's prefix rule would otherwise turn the first
@@ -1865,6 +1870,14 @@ export async function publishListing(
     ) {
       catKey = "mens_casual_shirt";
     }
+  }
+  // A neck-sized shirt ("16.5", "16 34/35", "16/16.5 34/35") is a woven dress
+  // shirt whatever its title says (e.g. "Long Sleeve Polo Shirt" on a Psycho
+  // Bunny Grover). Polo / casual / tee categories only take letter sizes, so a
+  // neck size there is rejected with 25129 — file it under Dress Shirts.
+  if (catKey === "mens_polo" || catKey === "mens_casual_shirt" || catKey === "mens_tshirt") {
+    const sz = String(listing.size || "").trim();
+    if (parseDressShirtSize(sz) || /^1[3-9](?:\.5)?$/.test(sz)) catKey = "mens_top";
   }
   // Base layers / thermals and wool sweaters were landing in Dress Shirts
   // (mens_top) with its Neck Size field. Route by title keyword.
