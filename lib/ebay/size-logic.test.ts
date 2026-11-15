@@ -292,3 +292,16 @@ describe("Big codes enter as BIG nX", () => {
     expect(sizeCandidates("2XB", "mens_top")).toContain("2XL");
   });
 });
+
+describe("dress shirt combined sizes", () => {
+  it("builds neck+sleeve candidates, never the bare neck first", () => {
+    expect(sizeCandidates("16.5 34/35", "mens_top")[0]).toBe("16.5 34/35");
+    expect(sizeCandidates("16 1/2 34/35", "mens_top")[0]).toBe("16.5 34/35");
+    expect(sizeCandidates("16/16.5 34/35", "mens_top").slice(0, 2)).toEqual(["16 34/35", "16 34"]);
+    expect(sizeCandidates("16/16.5 34/35", "mens_top")).toContain("16.5 34/35");
+    expect(sizeCandidates("15.5 32", "mens_top")[0]).toBe("15.5 32");
+  });
+  it("leaves letter sizes and pants alone", () => {
+    expect(sizeCandidates("XL", "mens_top")[0]).toBe("XL");
+  });
+});

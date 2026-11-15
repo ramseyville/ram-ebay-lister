@@ -181,7 +181,39 @@ export function normalizeExtendedSize(size: string): string {
   return m ? `${m[1]}XL` : size;
 }
 
+// Dress shirts are sized neck + sleeve ("16.5 34/35"). eBay's Size dropdown
+// for them holds those COMBINED values, so we never send the neck alone. A tag
+// that prints a neck range ("16/16.5 34/35") or a sleeve range yields every
+// plausible combined value, most specific first; reconcile keeps the first one
+// eBay actually lists.
+export function parseDressShirtSize(raw: string): { necks: string[]; sleeves: string[] } | null {
+  const t = String(raw || "").trim().replace(/[–—]/g, "-");
+  const m = /^(\d{2}(?:\.5|\s+1\/2)?(?:\s*[\/-]\s*\d{2}(?:\.5|\s+1\/2)?)?)\s*[-,]?\s*(\d{2}(?:\s*\/\s*\d{2})?)$/.exec(t);
+  if (!m) return null;
+  const norm = (n: string) => n.replace(/\s+1\/2/, ".5").trim();
+  const necks = m[1].replace(/\s+1\/2/g, ".5").split(/\s*[\/-]\s*/).map(norm).filter(Boolean);
+  const sl = m[2].replace(/\s+/g, "");
+  const sleeves = [sl];
+  const two = /^(\d{2})\/(\d{2})$/.exec(sl);
+  if (two) sleeves.push(two[1], two[2]);
+  if (necks.some((n) => +n < 13 || +n > 22)) return null;
+  return { necks, sleeves };
+}
+
+export function dressShirtCandidates(raw: string): string[] {
+  const p = parseDressShirtSize(raw);
+  if (!p) return [];
+  const out: string[] = [];
+  for (const n of p.necks) for (const sl of p.sleeves) out.push(`${n} ${sl}`);
+  for (const n of p.necks) out.push(n);
+  return Array.from(new Set(out));
+}
+
 export function sizeCandidates(rawSize: string, catKey: string): string[] {
+  if (catKey === "mens_top" || catKey === "womens_top") {
+    const dress = dressShirtCandidates(rawSize);
+    if (dress.length) return dress;
+  }
   const base0 = cleanSizeBase(rawSize);
 
   // "O/S" (One Size) has a slash too, but it's an abbreviation, not

@@ -49,6 +49,8 @@ import {
   inferSizeType,
   normalizeExtendedSize,
   sizeCandidates,
+  parseDressShirtSize,
+  dressShirtCandidates,
   looksLikeSizeCode,
   sizeAspectValue,
   isFragranceItem,
@@ -509,7 +511,16 @@ function buildAspects(listing: ListingResult, catKey: string): Record<string, st
   const shirtMatch = isShirtCat
     ? /^(\d{1,2})(?![A-Za-z])(\.5)?\s*(?:(1\/2)\s*)?[-–]?\s*(\d{2}(?:\/\d{2})?)?/.exec(rawSizeForShirt)
     : null;
-  if (shirtMatch) {
+  // eBay's Size list for dress shirts holds the COMBINED neck+sleeve value
+  // ("16 34/35"); the neck alone ("16") is rejected with 25129. Use the first
+  // combined candidate here; reconcile later swaps in whichever candidate
+  // eBay's live list actually contains (handles tags like "16/16.5 34/35").
+  const dress = isShirtCat ? parseDressShirtSize(rawSizeForShirt) : null;
+  if (dress) {
+    aspects["Size"] = [dressShirtCandidates(rawSizeForShirt)[0]];
+    aspects["Sleeve Length"] = [dress.sleeves[0]];
+    aspects["Neck Size"] = [dress.necks[0]];
+  } else if (shirtMatch) {
     const neck = shirtMatch[2] || shirtMatch[3] ? `${shirtMatch[1]}.5` : shirtMatch[1];
     aspects["Size"] = [neck];
     if (shirtMatch[4]) aspects["Sleeve Length"] = [shirtMatch[4]];
@@ -797,7 +808,10 @@ function reconcileAspects(
         // the same test.
         const rawFallback = String(listing.size || "");
         const cleanedRaw = rawFallback.toUpperCase().replace(/[^A-Z0-9]/g, "");
-        const fallbackInput = current || (looksLikeSizeCode(cleanedRaw) ? rawFallback : "");
+        // Dress shirts: start from the full tag size so a neck range
+        // ("16/16.5 34/35") tries every neck+sleeve combination.
+        const dressRaw = dressShirtCandidates(rawFallback).length ? rawFallback : "";
+        const fallbackInput = dressRaw || current || (looksLikeSizeCode(cleanedRaw) ? rawFallback : "");
         // Two passes: an EXACT match on any candidate wins before any fuzzy
         // one. matchAllowed's prefix rule would otherwise turn the first
         // candidate "3XLB" into plain "3XL" before "Big 3X" was ever tried.
