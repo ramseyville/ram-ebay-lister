@@ -1509,7 +1509,7 @@ export async function auditListingSizes(accessToken: string): Promise<SizeAuditE
 // retrieve the actual EPS imageUrl needed for listings). Two calls instead
 // of one, but same OAuth scope (sell.inventory) already held — no reconnect
 // needed.
-async function uploadPhoto(
+export async function uploadPhoto(
   accessToken: string,
   base64: string,
   mediaType: string,

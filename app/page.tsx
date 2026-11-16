@@ -429,10 +429,33 @@ export default function Home() {
         return;
       }
 
-      const images = group.photoIds
+      const groupPhotos = group.photoIds
         .map((id) => photoMap.get(id))
-        .filter((p): p is Photo => Boolean(p))
-        .map((p) => ({ mediaType: p.mediaType, data: p.data }));
+        .filter((p): p is Photo => Boolean(p));
+      const images = groupPhotos.map((p) => ({ mediaType: p.mediaType, data: p.data }));
+
+      // Upload the full-size (~1600px) copies to eBay one at a time, then publish
+      // with the returned eBay URLs. If any upload fails we fall back to the
+      // old path (publish uploads the smaller copies itself), so posting still works.
+      let existingImageUrls: string[] | undefined;
+      if (groupPhotos.length && groupPhotos.every((p) => p.big)) {
+        try {
+          const urls: string[] = [];
+          for (const [i, p] of groupPhotos.slice(0, 12).entries()) {
+            const up = await apiPost("/api/ebay/upload-photo", {
+              data: p.big,
+              mediaType: p.mediaType,
+              name: `${sku}-${i + 1}.jpg`,
+            });
+            const j = (await readJson(up)) as { ok?: boolean; url?: string };
+            if (!j.ok || !j.url) throw new Error("photo upload failed");
+            urls.push(j.url);
+          }
+          existingImageUrls = urls;
+        } catch (e) {
+          console.error("full-size photo upload failed, using standard photos:", e);
+        }
+      }
       setGroups((prev) =>
         prev.map((g) =>
           g.id === groupId ? { ...g, postStatus: "posting", postError: undefined } : g
@@ -442,7 +465,10 @@ export default function Home() {
         const res = await apiPost("/api/ebay/publish", {
           sku: group.sku,
           listing: group.listing,
-          images,
+          // With eBay-hosted full-size URLs the server doesn't need the pixels;
+          // one small photo satisfies its "has photos" check.
+          images: existingImageUrls ? images.slice(0, 1) : images,
+          ...(existingImageUrls ? { existingImageUrls } : {}),
         });
         const data = (await readJson(res)) as {
           success: boolean;

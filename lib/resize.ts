@@ -7,6 +7,10 @@
 //                  sort payload tiny avoids Vercel's 4.5 MB request-body limit
 //                  when a whole batch is sent at once.
 
+// The listing photos eBay shows to buyers: eBay recommends >= 1600px on the long
+// side (that is what enables zoom). The AI keeps reading the cheaper 1024px copy.
+const BIG_DIM = 1600;
+const BIG_QUALITY = 0.88;
 const FULL_DIM = 1024;
 const FULL_QUALITY = 0.82;
 const THUMB_DIM = 360;
@@ -16,17 +20,20 @@ export interface ResizedImage {
   mediaType: "image/jpeg";
   data: string; // base64 (no prefix) ~1024px — for listing analysis
   previewUrl: string; // data url ~400px — for display + sorting
+  big: string; // base64 (no prefix) ~1600px — uploaded to eBay for the listing
 }
 
 export async function resizeImage(file: File): Promise<ResizedImage> {
   const bitmap = await loadBitmap(file);
   const full = drawToJpeg(bitmap, FULL_DIM, FULL_QUALITY);
   const thumb = drawToJpeg(bitmap, THUMB_DIM, THUMB_QUALITY);
+  const big = drawToJpeg(bitmap, BIG_DIM, BIG_QUALITY);
   if ("close" in bitmap) bitmap.close();
   return {
     mediaType: "image/jpeg",
     data: full.split(",")[1],
     previewUrl: thumb,
+    big: big.split(",")[1],
   };
 }
 

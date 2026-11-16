@@ -72,7 +72,8 @@ export interface Photo {
   id: string;
   previewUrl: string;
   mediaType: string;
-  data: string; // base64, no prefix
+  data: string; // base64, no prefix (~1024px, for the AI)
+  big?: string; // base64, no prefix (~1600px, uploaded to eBay)
 }
 
 export type ItemStatus = "idle" | "writing" | "done" | "error";
