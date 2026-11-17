@@ -11,12 +11,12 @@
 // read the way eBay's own suggestions are. reconcileAspects() then validates every
 // value against eBay's lists as usual, so a bad pick can't reach eBay.
 
-import { getClient, parseModelJson } from "@/lib/anthropic";
+import { getClient, parseModelJson, CHEAP_MODEL } from "@/lib/anthropic";
 import { cleanSpecificValue } from "@/lib/description";
 import type { ListingResult } from "@/lib/types";
 import type { AspectMeta } from "./taxonomy";
 
-const FILL_MODEL = "claude-haiku-4-5-20251001";
+const FILL_MODEL = CHEAP_MODEL;
 // Longer value lists (Brand, Model…) aren't worth sending; those fields are
 // either already filled or not something to pick from a list of thousands.
 const MAX_LISTED_VALUES = 120;

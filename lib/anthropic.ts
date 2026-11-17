@@ -2,6 +2,12 @@ import Anthropic from "@anthropic-ai/sdk";
 
 let client: Anthropic | null = null;
 
+// Model for the cheap helper steps (item router, photo sort check, title/size
+// repair, item-specifics fill). Defaults to Haiku 4.5. To try the much cheaper
+// Haiku 5.5, set CHEAP_MODEL=claude-haiku-5-5 in Vercel (no code change);
+// delete the variable to go back instantly.
+export const CHEAP_MODEL = process.env.CHEAP_MODEL?.trim() || "claude-haiku-4-5-20251001";
+
 export function getClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {

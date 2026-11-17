@@ -1,7 +1,7 @@
 import { fixNeckSizedShirt } from "@/lib/ebay/shirt-category";
 import { NextRequest, NextResponse } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
-import { getClient, parseModelJson, AnthropicAuthError, anthropicAuthError } from "@/lib/anthropic";
+import { getClient, parseModelJson, AnthropicAuthError, anthropicAuthError, CHEAP_MODEL } from "@/lib/anthropic";
 import { guardApiRequest, safeErrorResponse } from "@/lib/api-guard";
 import {
   PROFILE_ROUTER_PROMPT,
@@ -35,8 +35,8 @@ const ANALYSIS_MAX_TOKENS = 16000;
 const ANALYZE_DEADLINE_MS = 270_000;
 // Don't start another listing call unless this much time is left.
 const MIN_CALL_MS = 90_000;
-const ROUTER_MODEL = "claude-haiku-4-5-20251001";
-const REPAIR_MODEL = "claude-haiku-4-5-20251001";
+const ROUTER_MODEL = CHEAP_MODEL;
+const REPAIR_MODEL = CHEAP_MODEL;
 const MAX_IMAGES = 5; // front, back, tag, detail, one more — sufficient for a complete listing
 
 // Web search requires the capability to be enabled on this API key's
@@ -410,8 +410,10 @@ export async function POST(req: NextRequest) {
                   // Second cache breakpoint (system prompt is the first):
                   // with web search on, the server re-runs the model several
                   // times inside this one request and each run re-reads the
-                  // photos. Cached, those re-reads bill at ~10%.
-                  cache_control: { type: "ephemeral" },
+                  // photos. Cached, those re-reads bill at ~10%. With search
+                  // skipped nothing re-reads them, so the 25% cache-write
+                  // premium would be wasted — only cache when search is on.
+                  ...(searchTools(wantSearch).length ? { cache_control: { type: "ephemeral" as const } } : {}),
                 },
               ],
             },
@@ -431,7 +433,7 @@ export async function POST(req: NextRequest) {
               role: "user",
               content: [
                 ...imageBlocks.slice(0, 3),
-                { type: "text", text: userText, cache_control: { type: "ephemeral" } },
+                { type: "text", text: userText, ...(searchTools(wantSearch).length ? { cache_control: { type: "ephemeral" as const } } : {}) },
               ],
             }],
           }, callOptions());
