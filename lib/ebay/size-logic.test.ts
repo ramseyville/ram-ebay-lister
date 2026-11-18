@@ -167,7 +167,7 @@ describe("sizeCandidates", () => {
   });
   it("leaves already-standard tall codes as a single unchanged candidate", () => {
     expect(sizeCandidates("2XLT", "mens_top")).toEqual(["2XLT"]);
-    expect(sizeCandidates("XLT (XL Tall)", "mens_top")).toEqual(["XLT"]);
+    expect(sizeCandidates("XLT (XL Tall)", "mens_top")).toEqual(["XLT", "X-Large Tall", "XL Tall"]);
   });
   it("recognizes O/S as One Size, not bilingual notation", () => {
     expect(sizeCandidates("O/S", "mens_tie")).toEqual(["One Size", "OS", "O/S"]);
@@ -303,5 +303,12 @@ describe("dress shirt combined sizes", () => {
   });
   it("leaves letter sizes and pants alone", () => {
     expect(sizeCandidates("XL", "mens_top")[0]).toBe("XL");
+  });
+});
+
+describe("Tall letter codes", () => {
+  it("XLT is a real size code and yields usable candidates", () => {
+    expect(sizeAspectValue("XLT", "mens_hoodie")).toBe("XLT");
+    expect(sizeCandidates("XLT", "mens_hoodie")).toEqual(["XLT", "X-Large Tall", "XL Tall"]);
   });
 });

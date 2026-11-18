@@ -284,6 +284,17 @@ export function sizeCandidates(rawSize: string, catKey: string): string[] {
     push(`${m[1]}XL`);
     push(`${m[1]}X`);
   }
+  // Letter Tall codes (XLT, LT, ST, MT): try eBay's spelled-out forms too,
+  // exact-matched against the category's real values before any fuzzy match.
+  const tall = (/\d/.test(base) ? null : /^(X{0,4})(L|S|M)T$/i.exec(base.replace(/[^A-Za-z]/g, "")));
+  if (tall) {
+    const name: Record<string, string> = { S: "Small", M: "Medium", L: "Large" };
+    const xs = tall[1].length;
+    const pre = xs === 0 ? "" : xs === 1 ? "X-" : `${xs}X-`;
+    push(base.toUpperCase());
+    push(`${pre}${name[tall[2].toUpperCase()]} Tall`);
+    push(`${xs === 0 ? "" : xs === 1 ? "X" : xs + "X"}${tall[2].toUpperCase()} Tall`);
+  }
   push(base);
   return out;
 }
@@ -292,6 +303,8 @@ export function looksLikeSizeCode(cleaned: string): boolean {
   if (!cleaned) return false;
   if (/\d/.test(cleaned)) return true;
   if (/^X{0,4}(S|L)$/.test(cleaned) || cleaned === "M" || cleaned === "OS") return true;
+  // Tall/Big letter codes with no digit: XLT, LT, ST, MT, XXLT, XLB...
+  if (/^(X{0,4}L|S|M)T$/.test(cleaned) || /^X{1,4}LB$/.test(cleaned)) return true;
   return false;
 }
 
