@@ -462,6 +462,13 @@ export default function Home() {
         )
       );
       try {
+        type PubResp = {
+          success: boolean;
+          listingId?: string;
+          error?: string;
+          conditionId?: number;
+          conditionName?: string;
+        };
         const res = await apiPost("/api/ebay/publish", {
           sku: group.sku,
           listing: group.listing,
@@ -470,13 +477,18 @@ export default function Home() {
           images: existingImageUrls ? images.slice(0, 1) : images,
           ...(existingImageUrls ? { existingImageUrls } : {}),
         });
-        const data = (await readJson(res)) as {
-          success: boolean;
-          listingId?: string;
-          error?: string;
-          conditionId?: number;
-          conditionName?: string;
-        };
+        let data = (await readJson(res)) as PubResp;
+        // eBay intermittently answers 25001 (generic 500) when full-size photo
+        // URLs are involved. Retry once with the standard-size photos the
+        // server uploads itself — the path that worked before.
+        if (!data.success && existingImageUrls && /25001|Internal Server Error/i.test(data.error || "")) {
+          const res2 = await apiPost("/api/ebay/publish", {
+            sku: group.sku,
+            listing: group.listing,
+            images,
+          });
+          data = (await readJson(res2)) as PubResp;
+        }
         if (!data.success) throw new Error(data.error || "eBay rejected the listing.");
         // Add to monthly ledger
         const postedGroup = groupsRef.current.find((g) => g.id === groupId);
