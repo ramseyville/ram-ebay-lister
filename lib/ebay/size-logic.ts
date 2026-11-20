@@ -43,8 +43,16 @@ export const SIZE_ENFORCED_CATEGORIES = new Set([
   "mens_casual_shirt", "mens_tshirt", "mens_activewear_top", "mens_hoodie", "womens_hoodie",
 ]);
 
+// "1X" is not an eBay size: 1XL is plain XL, 1XLT is XLT, 1XB is XLB.
+// Brands like Johnnie-O print "1XLT"; leaving it makes eBay reject the value.
+export function normalizeOneX(raw: string): string {
+  return (raw || "").replace(/(^|[^0-9A-Za-z])1(X(?:LT|LB|L|T|B)?)(?![A-Za-z0-9])/gi, (_m, pre, rest) =>
+    /^X$/i.test(rest) ? `${pre}XL` : `${pre}${rest}`
+  );
+}
+
 export function cleanSizeBase(rawSize: string): string {
-  let base = (rawSize || "").trim();
+  let base = normalizeOneX(rawSize || "").trim();
   base = base.replace(/\s*\([^)]*\)\s*$/, ""); // strip parenthetical explanations
   if (/^O\/?S$/i.test(base)) return base; // "O/S" isn't bilingual — leave it alone here
   base = base.split("/")[0].trim(); // strip bilingual/dual-notation second half
@@ -52,7 +60,7 @@ export function cleanSizeBase(rawSize: string): string {
 }
 
 export function sizeParts(rawSize: string): string[] {
-  const raw = (rawSize || "").trim();
+  const raw = normalizeOneX(rawSize || "").trim();
   // The parenthetical is usually just an explanation safe to drop when
   // picking a VALUE to submit ("XLT (XL Tall)" — the code alone is enough).
   // But for DETECTION it can be the only place a signal appears at all

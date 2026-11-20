@@ -312,3 +312,13 @@ describe("Tall letter codes", () => {
     expect(sizeCandidates("XLT", "mens_hoodie")).toEqual(["XLT", "X-Large Tall", "XL Tall"]);
   });
 });
+
+describe("1X sizes", () => {
+  it("1XLT becomes XLT with a Tall size type", () => {
+    expect(sizeCandidates("1XLT", "mens_hoodie")[0]).toBe("XLT");
+    expect(sizeAspectValue("1XLT", "mens_casual_shirt")).toBe("XLT");
+    expect(sizeTypeCandidates("1XLT", "mens_hoodie")[0]).toBe("Tall");
+    expect(sizeCandidates("1XL", "mens_top")[0]).toBe("XL");
+    expect(sizeCandidates("2XLT", "mens_top")).toEqual(["2XLT"]);
+  });
+});
