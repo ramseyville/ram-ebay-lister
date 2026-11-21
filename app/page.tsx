@@ -413,6 +413,31 @@ export default function Home() {
         );
         return;
       }
+      // Never send a sized garment to eBay without a size. If it's blank, ask.
+      let postListing = group.listing;
+      const kidsOrSized =
+        /^(mens|womens)_(?!tie$)/.test(String(postListing.category || "")) ||
+        /^(boys|girls)/i.test(String(postListing.item_specifics?.Department || ""));
+      if (kidsOrSized && !String(postListing.size || "").trim()) {
+        const entered = typeof window !== "undefined"
+          ? window.prompt(
+              `No size was detected for "${postListing.title}".\n\nEnter the size from the tag (e.g. L, 34x32, 16.5 34/35), or Cancel to stop and check the photos:`
+            )
+          : null;
+        const size = (entered || "").trim();
+        if (!size) {
+          setGroups((prev) =>
+            prev.map((g) =>
+              g.id === groupId
+                ? { ...g, postStatus: "error", postError: "Not posted: no size. Enter the size from the tag, then post again." }
+                : g
+            )
+          );
+          return;
+        }
+        editListing(groupId, { size });
+        postListing = { ...postListing, size };
+      }
       const duplicate = groupsRef.current.find((g) => g.id !== groupId && (g.sku || "").trim() === sku);
       if (duplicate) {
         setGroups((prev) =>
@@ -471,7 +496,7 @@ export default function Home() {
         };
         const res = await apiPost("/api/ebay/publish", {
           sku: group.sku,
-          listing: group.listing,
+          listing: postListing,
           // With eBay-hosted full-size URLs the server doesn't need the pixels;
           // one small photo satisfies its "has photos" check.
           images: existingImageUrls ? images.slice(0, 1) : images,
@@ -484,7 +509,7 @@ export default function Home() {
         if (!data.success && existingImageUrls && /25001|Internal Server Error/i.test(data.error || "")) {
           const res2 = await apiPost("/api/ebay/publish", {
             sku: group.sku,
-            listing: group.listing,
+            listing: postListing,
             images,
           });
           data = (await readJson(res2)) as PubResp;
