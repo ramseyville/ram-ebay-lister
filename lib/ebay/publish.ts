@@ -1879,6 +1879,17 @@ export async function publishListing(
     const sz = String(listing.size || "").trim();
     if (parseDressShirtSize(sz) || /^1[3-9](?:\.5)?$/.test(sz)) catKey = "mens_top";
   }
+  // A bare small number (2–12) on a shirt is a KIDS size (e.g. Johnnie-O boys
+  // "10"), never a men's size; men's shirt categories reject it with 25129.
+  // Hand it to the live category suggester (as a boys' shirt) instead.
+  if (["mens_polo", "mens_casual_shirt", "mens_tshirt", "mens_top"].includes(catKey)) {
+    const szKid = String(listing.size || "").trim();
+    if (/^(?:[2-9]|1[0-2])$/.test(szKid)) {
+      catKey = "other";
+      listing.category_hint = `Boys' shirt ${listing.category_hint || ""}`.trim();
+      listing.item_specifics = { ...(listing.item_specifics || {}), Department: "Boys" };
+    }
+  }
   // Base layers / thermals and wool sweaters were landing in Dress Shirts
   // (mens_top) with its Neck Size field. Route by title keyword.
   if (POLO_MISCLASSIFY_TARGETS.has(catKey) || catKey === "mens_top" || catKey === "mens_casual_shirt") {
