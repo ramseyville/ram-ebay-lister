@@ -743,7 +743,9 @@ function reconcileAspects(
     // in the allowed set, drop any value the model may have placed there and
     // skip filling a default. Prevents "Hood: No Hood" on dress shirts, etc.
     const gate = ASPECT_CATEGORY_GATES[a.name];
-    if (gate && !gate.has(catKey)) {
+    // A required aspect is never gated out: eBay will 25002 if it is missing
+    // (e.g. Size Type on a leaf the suggester picked for boys' shirts).
+    if (gate && !a.required && !gate.has(catKey)) {
       // Only drop if the value looks like a default guess, not something the
       // model read directly from the item (e.g. a hoodie correctly flagged
       // even though its leaf category is "mens_top"). Heuristic: drop if the
