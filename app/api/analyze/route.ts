@@ -151,9 +151,13 @@ async function recoverMissingSize(
 ): Promise<void> {
   if (String(listing.size || "").trim()) return;
   if (!SIZED_CATEGORY.test(String(listing.category || ""))) return;
+  // Cheap model first; if it can't read the tag (or errors), the main model
+  // gets one try. A blank size on a clearly photographed tag is worse than
+  // the few cents the second read costs.
+  for (const model of [REPAIR_MODEL, ANALYSIS_MODEL]) {
   try {
     const resp = await client.messages.create({
-      model: REPAIR_MODEL,
+      model,
       max_tokens: 100,
       messages: [
         {
@@ -173,10 +177,16 @@ async function recoverMissingSize(
     });
     const data = parseModelJson<{ size?: string }>(firstText(resp));
     const size = String(data?.size || "").trim();
-    if (size && size.length <= 20 && /\d|^(X{0,4}[SL]|M|OS|O\/S)/i.test(size)) listing.size = size;
+    if (size && size.length <= 20 && /\d|^(X{0,4}[SL]|M|OS|O\/S)/i.test(size)) {
+      listing.size = size;
+      return;
+    }
+    console.error(`[analyze] size recovery by ${model} found nothing`);
   } catch (e) {
     const fatal = anthropicAuthError(e);
     if (fatal) throw fatal;
+    console.error(`[analyze] size recovery by ${model} failed:`, (e as Error)?.message);
+  }
   }
 }
 
@@ -461,7 +471,18 @@ export async function POST(req: NextRequest) {
         if (!hadSize && listing.size && listing.title) {
           const sizeRe = new RegExp(`\\b${listing.size.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
           const withSize = `${listing.title.trim()} ${listing.size}`;
-          if (!sizeRe.test(listing.title) && withSize.length <= 80) listing.title = withSize;
+          if (!sizeRe.test(listing.title)) {
+            if (withSize.length <= 80) listing.title = withSize;
+            else {
+              // Title is full: put the size before a trailing NWT/NWOT/etc. and
+              // drop low-value middle words until it fits (keep >= 6 words).
+              const words = listing.title.trim().split(/\s+/);
+              const tail = /^(NWT|NWOT|NWD|EUC|GUC|VGUC)$/i.test(words[words.length - 1] || "") ? [words.pop() as string] : [];
+              while (words.length > 6 && [...words, listing.size, ...tail].join(" ").length > 80) words.splice(words.length - 1, 1);
+              const fitted = [...words, listing.size, ...tail].join(" ");
+              if (fitted.length <= 80) listing.title = fitted;
+            }
+          }
         }
         await repairTitleLength(client, listing);
         // Deterministic backstop: the prompt instructs "Navy Blue" over
