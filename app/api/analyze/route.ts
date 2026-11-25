@@ -376,11 +376,19 @@ export async function POST(req: NextRequest) {
     const remaining = () => ANALYZE_DEADLINE_MS - (Date.now() - startedAt);
     // Per-call timeout leaves room for title repair; no SDK-level retries,
     // since a retried timeout would blow straight through the deadline.
-    const callOptions = () => ({ timeout: Math.max(remaining() - 20_000, 30_000), maxRetries: 0 });
+    // First attempt with search on is capped at 150s so a stalled search can't
+    // eat the whole budget; the retry then runs search-free.
+    const callOptions = () => ({
+      timeout: Math.max(Math.min(remaining() - 20_000, wantSearch && !retrySansSearch ? 150_000 : 1e9), 30_000),
+      maxRetries: 0,
+    });
 
     // Retry up to 3 times, mirroring the Python analyze_photos() loop.
     let lastErr: unknown = null;
     let outOfTime = false;
+    // A first attempt that fails or stalls with web search on is retried
+    // without it: far faster, and the listing still gets written.
+    let retrySansSearch = false;
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0 && remaining() < MIN_CALL_MS) {
         outOfTime = true;
@@ -399,7 +407,7 @@ export async function POST(req: NextRequest) {
           // Bounded to a handful of uses per item to keep cost and latency
           // in check — this isn't meant to research exhaustively, just to
           // verify the specific, nameable product the photos show.
-          tools: searchTools(wantSearch),
+          tools: searchTools(wantSearch && !retrySansSearch),
           // System prompt is large and identical across requests for the same
           // profile — cache it to cut cost and latency.
           system: [
@@ -423,7 +431,7 @@ export async function POST(req: NextRequest) {
                   // photos. Cached, those re-reads bill at ~10%. With search
                   // skipped nothing re-reads them, so the 25% cache-write
                   // premium would be wasted — only cache when search is on.
-                  ...(searchTools(wantSearch).length ? { cache_control: { type: "ephemeral" as const } } : {}),
+                  ...(searchTools(wantSearch && !retrySansSearch).length ? { cache_control: { type: "ephemeral" as const } } : {}),
                 },
               ],
             },
@@ -437,13 +445,13 @@ export async function POST(req: NextRequest) {
           finalResp = await client.messages.create({
             model: ANALYSIS_MODEL,
             max_tokens: ANALYSIS_MAX_TOKENS,
-            tools: searchTools(wantSearch),
+            tools: searchTools(wantSearch && !retrySansSearch),
             system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
             messages: [{
               role: "user",
               content: [
                 ...imageBlocks.slice(0, 3),
-                { type: "text", text: userText, ...(searchTools(wantSearch).length ? { cache_control: { type: "ephemeral" as const } } : {}) },
+                { type: "text", text: userText, ...(searchTools(wantSearch && !retrySansSearch).length ? { cache_control: { type: "ephemeral" as const } } : {}) },
               ],
             }],
           }, callOptions());
@@ -515,6 +523,10 @@ export async function POST(req: NextRequest) {
           continue; // retry immediately without the tool, don't burn the backoff delay on a known cause
         }
         lastErr = err;
+        if (wantSearch && !retrySansSearch) {
+          retrySansSearch = true;
+          console.error("[analyze] retrying without web search");
+        }
         console.error(`[analyze] attempt ${attempt + 1} failed:`, err);
         if (attempt < 2) {
           await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
