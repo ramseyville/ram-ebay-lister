@@ -465,17 +465,32 @@ export default function Home() {
       let existingImageUrls: string[] | undefined;
       if (groupPhotos.length && groupPhotos.every((p) => p.big)) {
         try {
-          const urls: string[] = [];
-          for (const [i, p] of groupPhotos.slice(0, 12).entries()) {
-            const up = await apiPost("/api/ebay/upload-photo", {
-              data: p.big,
-              mediaType: p.mediaType,
-              name: `${sku}-${i + 1}.jpg`,
-            });
-            const j = (await readJson(up)) as { ok?: boolean; url?: string };
-            if (!j.ok || !j.url) throw new Error("photo upload failed");
-            urls.push(j.url);
-          }
+          const list = groupPhotos.slice(0, 12);
+          const urls: string[] = new Array(list.length);
+          let next = 0;
+          // 4 uploads at a time (was one by one), each retried once.
+          const worker = async () => {
+            while (next < list.length) {
+              const i = next++;
+              let url = "";
+              for (let t = 0; t < 2 && !url; t++) {
+                try {
+                  const up = await apiPost("/api/ebay/upload-photo", {
+                    data: list[i].big,
+                    mediaType: list[i].mediaType,
+                    name: `${sku}-${i + 1}.jpg`,
+                  });
+                  const j = (await readJson(up)) as { ok?: boolean; url?: string };
+                  if (j.ok && j.url) url = j.url;
+                } catch {
+                  /* retry once */
+                }
+              }
+              if (!url) throw new Error("photo upload failed");
+              urls[i] = url;
+            }
+          };
+          await Promise.all(Array.from({ length: Math.min(4, list.length) }, worker));
           existingImageUrls = urls;
         } catch (e) {
           console.error("full-size photo upload failed, using standard photos:", e);
@@ -494,14 +509,26 @@ export default function Home() {
           conditionId?: number;
           conditionName?: string;
         };
-        const res = await apiPost("/api/ebay/publish", {
-          sku: group.sku,
-          listing: postListing,
-          // With eBay-hosted full-size URLs the server doesn't need the pixels;
-          // one small photo satisfies its "has photos" check.
-          images: existingImageUrls ? images.slice(0, 1) : images,
-          ...(existingImageUrls ? { existingImageUrls } : {}),
-        });
+        // "Failed to fetch" = the connection dropped (slow publish, flaky
+        // network). Retry once before reporting failure; the server refuses to
+        // overwrite a SKU that already went live, so a retry can't double-post.
+        let res: Response;
+        try {
+          res = await apiPost("/api/ebay/publish", {
+            sku: group.sku,
+            listing: postListing,
+            // With eBay-hosted full-size URLs the server doesn't need the pixels;
+            // one small photo satisfies its "has photos" check.
+            images: existingImageUrls ? images.slice(0, 1) : images,
+            ...(existingImageUrls ? { existingImageUrls } : {}),
+          });
+        } catch {
+          res = await apiPost("/api/ebay/publish", {
+            sku: group.sku,
+            listing: postListing,
+            images,
+          });
+        }
         let data = (await readJson(res)) as PubResp;
         // eBay intermittently answers 25001 (generic 500) when full-size photo
         // URLs are involved. Retry once with the standard-size photos the
