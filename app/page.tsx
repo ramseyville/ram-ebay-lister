@@ -463,7 +463,7 @@ export default function Home() {
       // with the returned eBay URLs. If any upload fails we fall back to the
       // old path (publish uploads the smaller copies itself), so posting still works.
       let existingImageUrls: string[] | undefined;
-      if (groupPhotos.length && groupPhotos.every((p) => p.big)) {
+      if (process.env.NEXT_PUBLIC_FULLSIZE_PHOTOS !== "0" && groupPhotos.length && groupPhotos.every((p) => p.big)) {
         try {
           const list = groupPhotos.slice(0, 12);
           const urls: string[] = new Array(list.length);
