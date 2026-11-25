@@ -2631,7 +2631,8 @@ async function publishOfferWithRecovery(
   // the real rejection than mask it with a misleading one.
   const NEVER_STRIP = new Set(["Size", "Size Type"]);
   const triedSizeTypes = new Set<string>();
-  for (let round = 0; round < 3 && eids.includes(25129); round++) {
+  const triedSizes = new Set<string>();
+  for (let round = 0; round < 6 && eids.includes(25129); round++) {
     // Size Type gets special handling: instead of stripping it (protected,
     // like Size), rotate to the OTHER plausible candidate. eBay's live
     // publish validator can reject a value that matched their own
@@ -2673,6 +2674,23 @@ async function publishOfferWithRecovery(
     // to substitute — so retry the SAME value once after a brief pause, in
     // case it's momentary propagation lag on eBay's side rather than
     // something a different value would ever fix.
+    if (extractUnsupportedAspects(r).includes("Size") && !sizeTypePairingRejected(r)) {
+      // Rotate through the other candidate spellings of this size (e.g. BIG 2X
+      // → 2XB → 2XLB → 2XL → 2X) — eBay's live validator can reject the value
+      // its own metadata listed or one we guessed when the list was empty.
+      const rejected = (ctx.aspects["Size"]?.[0] || "").toLowerCase();
+      triedSizes.add(rejected);
+      const nextSize = sizeCandidates(ctx.rawSize, ctx.catKey).find((c) => !triedSizes.has(c.toLowerCase()));
+      if (nextSize) {
+        ctx.aspects["Size"] = [nextSize];
+        ctx.inventoryItem.product.aspects = ctx.aspects;
+        await putInventory();
+        r = await doPublish();
+        if (r.ok) return { success: true, sku, offerId, listingId: r.json?.listingId || "" };
+        eids = errorIds(r);
+        continue;
+      }
+    }
     if (extractUnsupportedAspects(r).includes("Size") && round === 0) {
       await new Promise((res) => setTimeout(res, 1500));
       r = await doPublish();
